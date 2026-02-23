@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.env
+
+# Models & Weights (Verranno scaricati all'avvio)
+*.pt
+*.onnx
+*.engine
+yolo11*.pt
+
+# Media & Logs
+assets/*
+!assets/.gitkeep
+outputs/*
+!outputs/.gitkeep
+
+# OS
+.DS_Store
+Thumbs.db

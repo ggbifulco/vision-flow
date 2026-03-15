@@ -1,0 +1,17 @@
+{
+  "name": "VisionFlow AI",
+  "short_name": "VisionFlow",
+  "description": "Real-time Multimodal Intelligent Monitoring",
+  "start_url": "/?pwa=true",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2586/2586762.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

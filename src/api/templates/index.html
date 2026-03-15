@@ -1,0 +1,1083 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>VisionFlow AI</title>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#09090b">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg: #09090b;
+            --surface: #18181b;
+            --surface-2: #1f1f23;
+            --surface-3: #27272a;
+            --border: #2e2e33;
+            --border-hover: #3f3f46;
+            --text: #fafafa;
+            --text-dim: #a1a1aa;
+            --text-muted: #71717a;
+            --accent: #22d3ee;
+            --accent-dim: rgba(34, 211, 238, 0.12);
+            --accent-glow: rgba(34, 211, 238, 0.25);
+            --danger: #f43f5e;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --radius: 12px;
+            --radius-sm: 8px;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ── HEADER ── */
+        .topbar {
+            height: 56px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            border-bottom: 1px solid var(--border);
+            background: rgba(9, 9, 11, 0.9);
+            backdrop-filter: blur(20px);
+            z-index: 50;
+            flex-shrink: 0;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .brand-icon {
+            width: 32px; height: 32px;
+            background: linear-gradient(135deg, var(--accent), #6366f1);
+            border-radius: 8px;
+            display: grid;
+            place-items: center;
+            font-size: 16px;
+        }
+
+        .brand-name {
+            font-weight: 700;
+            font-size: 1.1rem;
+            letter-spacing: -0.02em;
+        }
+
+        .brand-tag {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.65rem;
+            color: var(--accent);
+            background: var(--accent-dim);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+
+        .topbar-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .cam-select {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            background: var(--surface);
+            color: var(--text);
+            border: 1px solid var(--border);
+            padding: 6px 12px;
+            border-radius: var(--radius-sm);
+            outline: none;
+            cursor: pointer;
+        }
+
+        .icon-btn {
+            width: 36px; height: 36px;
+            display: grid;
+            place-items: center;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            color: var(--text-dim);
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.15s;
+        }
+
+        .icon-btn:hover {
+            background: var(--surface-2);
+            border-color: var(--border-hover);
+            color: var(--text);
+        }
+
+        /* ── MAIN LAYOUT ── */
+        .app-layout {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* ── FEED ── */
+        .feed-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        .feed-wrapper {
+            flex: 1;
+            background: #000;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .feed-wrapper img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        .feed-overlay {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .feed-chip {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            padding: 4px 10px;
+            border-radius: 6px;
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255,255,255,0.08);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            width: fit-content;
+        }
+
+        .pulse-dot {
+            width: 6px; height: 6px;
+            border-radius: 50%;
+            background: var(--success);
+            animation: pulse 2s infinite;
+        }
+
+        .pulse-dot.thinking {
+            background: var(--warning);
+            animation: pulse 0.8s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        /* ── BOTTOM BAR (analysis + ask) ── */
+        .bottom-bar {
+            border-top: 1px solid var(--border);
+            background: var(--surface);
+            padding: 14px 20px;
+            display: flex;
+            gap: 16px;
+            align-items: flex-start;
+            flex-shrink: 0;
+        }
+
+        .analysis-display {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .analysis-label {
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 4px;
+        }
+
+        .analysis-text {
+            font-size: 0.88rem;
+            line-height: 1.5;
+            color: var(--text-dim);
+            max-height: 60px;
+            overflow-y: auto;
+        }
+
+        .ask-form {
+            display: flex;
+            gap: 8px;
+            flex-shrink: 0;
+            align-items: center;
+        }
+
+        .ask-input {
+            font-family: 'Outfit', sans-serif;
+            font-size: 0.85rem;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 8px 14px;
+            border-radius: var(--radius-sm);
+            outline: none;
+            width: 260px;
+            transition: border-color 0.15s;
+        }
+
+        .ask-input:focus { border-color: var(--accent); }
+        .ask-input::placeholder { color: var(--text-muted); }
+
+        .btn {
+            font-family: 'Outfit', sans-serif;
+            font-size: 0.82rem;
+            font-weight: 600;
+            padding: 8px 18px;
+            border: none;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all 0.15s;
+            white-space: nowrap;
+        }
+
+        .btn-accent {
+            background: var(--accent);
+            color: #000;
+        }
+
+        .btn-accent:hover {
+            background: #06b6d4;
+            box-shadow: 0 0 20px var(--accent-glow);
+        }
+
+        /* ── SETTINGS PANEL ── */
+        .settings-panel {
+            width: 380px;
+            border-left: 1px solid var(--border);
+            background: var(--surface);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: width 0.3s ease, opacity 0.3s ease;
+            flex-shrink: 0;
+        }
+
+        .settings-panel.collapsed {
+            width: 0;
+            border-left: none;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .panel-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+
+        .panel-title {
+            font-weight: 700;
+            font-size: 0.95rem;
+        }
+
+        .panel-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px 20px;
+        }
+
+        .panel-body::-webkit-scrollbar { width: 4px; }
+        .panel-body::-webkit-scrollbar-track { background: transparent; }
+        .panel-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+        /* ── SETTINGS SECTIONS ── */
+        .setting-section {
+            margin-bottom: 24px;
+        }
+
+        .setting-section:last-child { margin-bottom: 0; }
+
+        .section-header {
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .section-divider {
+            height: 1px;
+            background: var(--border);
+            margin-bottom: 24px;
+        }
+
+        .setting-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+
+        .setting-row:last-child { margin-bottom: 0; }
+
+        .setting-label {
+            font-size: 0.82rem;
+            color: var(--text-dim);
+        }
+
+        .setting-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            color: var(--accent);
+            min-width: 40px;
+            text-align: right;
+        }
+
+        /* ── INPUTS ── */
+        .s-input {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 8px 12px;
+            border-radius: var(--radius-sm);
+            outline: none;
+            width: 100%;
+            transition: border-color 0.15s;
+        }
+
+        .s-input:focus { border-color: var(--accent); }
+        .s-input::placeholder { color: var(--text-muted); }
+
+        .s-textarea {
+            font-family: 'Outfit', sans-serif;
+            font-size: 0.82rem;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 10px 12px;
+            border-radius: var(--radius-sm);
+            outline: none;
+            width: 100%;
+            resize: vertical;
+            min-height: 60px;
+            line-height: 1.5;
+            transition: border-color 0.15s;
+        }
+
+        .s-textarea:focus { border-color: var(--accent); }
+
+        .slider-wrap {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            width: 100%;
+        }
+
+        .slider-wrap input[type="range"] {
+            flex: 1;
+            -webkit-appearance: none;
+            appearance: none;
+            height: 4px;
+            background: var(--border);
+            border-radius: 2px;
+            outline: none;
+        }
+
+        .slider-wrap input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--accent);
+            cursor: pointer;
+            border: 2px solid var(--bg);
+            box-shadow: 0 0 8px var(--accent-glow);
+        }
+
+        /* ── TAGS ── */
+        .tag-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 8px;
+        }
+
+        .tag {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            background: var(--accent-dim);
+            color: var(--accent);
+            padding: 3px 10px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .tag-remove {
+            cursor: pointer;
+            opacity: 0.5;
+            font-size: 0.8rem;
+        }
+
+        .tag-remove:hover { opacity: 1; }
+
+        .tag-input-wrap {
+            display: flex;
+            gap: 6px;
+            margin-top: 8px;
+        }
+
+        .tag-input-wrap .s-input { flex: 1; }
+
+        .btn-sm {
+            font-family: 'Outfit', sans-serif;
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 6px 14px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            background: var(--surface-2);
+            color: var(--text-dim);
+            cursor: pointer;
+            transition: all 0.15s;
+            white-space: nowrap;
+        }
+
+        .btn-sm:hover {
+            background: var(--surface-3);
+            color: var(--text);
+            border-color: var(--border-hover);
+        }
+
+        .btn-sm.active {
+            background: var(--accent-dim);
+            color: var(--accent);
+            border-color: rgba(34, 211, 238, 0.3);
+        }
+
+        /* ── CHECKBOX GRID ── */
+        .class-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+            margin-top: 8px;
+        }
+
+        .class-chip {
+            font-size: 0.75rem;
+            padding: 6px 10px;
+            border-radius: 6px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            cursor: pointer;
+            transition: all 0.15s;
+            text-align: center;
+            user-select: none;
+        }
+
+        .class-chip.active {
+            background: var(--accent-dim);
+            border-color: rgba(34, 211, 238, 0.3);
+            color: var(--accent);
+        }
+
+        .class-chip:hover { border-color: var(--border-hover); }
+
+        /* ── TELEGRAM SECTION ── */
+        .tg-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 14px;
+            border-radius: var(--radius-sm);
+            font-size: 0.82rem;
+            margin-top: 8px;
+        }
+
+        .tg-status.connected {
+            background: rgba(16, 185, 129, 0.08);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            color: var(--success);
+        }
+
+        .tg-status.waiting {
+            background: rgba(245, 158, 11, 0.08);
+            border: 1px solid rgba(245, 158, 11, 0.2);
+            color: var(--warning);
+        }
+
+        .tg-status.disconnected {
+            background: rgba(244, 63, 94, 0.08);
+            border: 1px solid rgba(244, 63, 94, 0.15);
+            color: var(--text-muted);
+        }
+
+        .tg-qr {
+            text-align: center;
+            margin-top: 12px;
+        }
+
+        .tg-qr img {
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+
+        .tg-qr-hint {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            margin-top: 6px;
+        }
+
+        /* ── SAVE BUTTON ── */
+        .save-bar {
+            padding: 12px 20px;
+            border-top: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+
+        .btn-save {
+            width: 100%;
+            font-family: 'Outfit', sans-serif;
+            font-size: 0.85rem;
+            font-weight: 600;
+            padding: 10px;
+            border: none;
+            border-radius: var(--radius-sm);
+            background: var(--accent);
+            color: #000;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-save:hover {
+            background: #06b6d4;
+            box-shadow: 0 0 24px var(--accent-glow);
+        }
+
+        .btn-save.saved {
+            background: var(--success);
+        }
+
+        /* ── RESPONSIVE ── */
+        @media (max-width: 900px) {
+            .settings-panel {
+                position: fixed;
+                top: 0; right: 0; bottom: 0;
+                z-index: 100;
+                width: 100%;
+                max-width: 380px;
+                box-shadow: -8px 0 40px rgba(0,0,0,0.6);
+            }
+            .settings-panel.collapsed {
+                transform: translateX(100%);
+                width: 100%;
+                max-width: 380px;
+                opacity: 1;
+            }
+            .ask-input { width: 160px; }
+            .bottom-bar { flex-direction: column; }
+            .ask-form { width: 100%; }
+            .ask-input { flex: 1; width: auto; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- TOPBAR -->
+    <div class="topbar">
+        <div class="brand">
+            <div class="brand-icon">V</div>
+            <span class="brand-name">VisionFlow</span>
+            <span class="brand-tag" id="providerTag">YOLO26 + GEMINI</span>
+        </div>
+        <div class="topbar-actions">
+            <select class="cam-select" id="camSelect" onchange="changeCamera()"></select>
+            <button class="icon-btn" onclick="toggleSettings()" title="Settings" id="settingsToggle">&#9881;</button>
+        </div>
+    </div>
+
+    <!-- MAIN -->
+    <div class="app-layout">
+
+        <!-- FEED + BOTTOM -->
+        <div class="feed-area">
+            <div class="feed-wrapper">
+                <img id="videoFeed" src="" alt="Live Feed">
+                <div class="feed-overlay">
+                    <div class="feed-chip">
+                        <div class="pulse-dot" id="statusDot"></div>
+                        <span id="statusText">Connecting...</span>
+                    </div>
+                    <div class="feed-chip" id="frameChip" style="display:none">
+                        <span id="frameCount">0</span> frames
+                    </div>
+                </div>
+            </div>
+            <div class="bottom-bar">
+                <div class="analysis-display">
+                    <div class="analysis-label">AI Analysis</div>
+                    <div class="analysis-text" id="analysisText">Waiting for first analysis...</div>
+                </div>
+                <div class="ask-form">
+                    <input class="ask-input" id="askInput" type="text" placeholder="Ask the AI..." onkeydown="if(event.key==='Enter')sendQuery()">
+                    <button class="btn btn-accent" onclick="sendQuery()">Ask</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- SETTINGS PANEL -->
+        <div class="settings-panel" id="settingsPanel">
+            <div class="panel-header">
+                <span class="panel-title">Configuration</span>
+                <button class="icon-btn" onclick="toggleSettings()" style="width:28px;height:28px;font-size:0.8rem">&times;</button>
+            </div>
+
+            <div class="panel-body">
+
+                <!-- AI MISSION -->
+                <div class="setting-section">
+                    <div class="section-header">&#127919; AI Mission</div>
+                    <textarea class="s-textarea" id="missionInput" rows="2" placeholder="What should the AI watch for?"></textarea>
+                    <div style="margin-top:8px">
+                        <button class="btn-sm" onclick="updateMission()">Update Mission</button>
+                    </div>
+                </div>
+
+                <div class="section-divider"></div>
+
+                <!-- VLM PROVIDER -->
+                <div class="setting-section">
+                    <div class="section-header">&#129302; VLM Provider</div>
+                    <div class="setting-row">
+                        <span class="setting-label">AI Backend</span>
+                    </div>
+                    <div style="display:flex;gap:6px;margin-top:4px">
+                        <button class="btn-sm active" id="btnGemini" onclick="setProvider('gemini')">Gemini</button>
+                        <button class="btn-sm" id="btnGroq" onclick="setProvider('groq')">Groq</button>
+                    </div>
+                    <p style="font-size:0.7rem;color:var(--text-muted);margin-top:8px" id="providerHint">Using Google Gemini 3.1 Flash Lite</p>
+                </div>
+
+                <div class="section-divider"></div>
+
+                <!-- DETECTION -->
+                <div class="setting-section">
+                    <div class="section-header">&#128065; Detection</div>
+                    <div class="setting-row">
+                        <span class="setting-label">Confidence Threshold</span>
+                        <span class="setting-value" id="confValue">0.45</span>
+                    </div>
+                    <div class="slider-wrap">
+                        <input type="range" id="confSlider" min="0.1" max="0.95" step="0.05" value="0.45"
+                               oninput="document.getElementById('confValue').textContent=this.value">
+                    </div>
+
+                    <div class="setting-row" style="margin-top:14px">
+                        <span class="setting-label">VLM Interval</span>
+                        <span class="setting-value"><span id="intervalValue">5</span>s</span>
+                    </div>
+                    <div class="slider-wrap">
+                        <input type="range" id="intervalSlider" min="2" max="30" step="1" value="5"
+                               oninput="document.getElementById('intervalValue').textContent=this.value">
+                    </div>
+                </div>
+
+                <div class="section-divider"></div>
+
+                <!-- TRIGGER CLASSES -->
+                <div class="setting-section">
+                    <div class="section-header">&#127919; Trigger Classes</div>
+                    <p style="font-size:0.72rem;color:var(--text-muted);margin-bottom:8px">VLM activates when these are detected</p>
+                    <div class="class-grid" id="classGrid"></div>
+                </div>
+
+                <div class="section-divider"></div>
+
+                <!-- ALERT KEYWORDS -->
+                <div class="setting-section">
+                    <div class="section-header">&#128680; Alert Keywords</div>
+                    <p style="font-size:0.72rem;color:var(--text-muted);margin-bottom:4px">Triggers Telegram notification when found in analysis</p>
+                    <div class="tag-container" id="keywordTags"></div>
+                    <div class="tag-input-wrap">
+                        <input class="s-input" id="newKeyword" placeholder="Add keyword..." onkeydown="if(event.key==='Enter')addKeyword()">
+                        <button class="btn-sm" onclick="addKeyword()">Add</button>
+                    </div>
+                </div>
+
+                <div class="section-divider"></div>
+
+                <!-- DISPLAY -->
+                <div class="setting-section">
+                    <div class="section-header">&#128187; Display</div>
+                    <div class="setting-row">
+                        <span class="setting-label">Resolution</span>
+                        <select class="cam-select" id="resSelect" style="font-size:0.75rem;padding:4px 8px">
+                            <option value="640x480">640 x 480</option>
+                            <option value="800x600">800 x 600</option>
+                            <option value="1280x720">1280 x 720</option>
+                        </select>
+                    </div>
+                    <div class="setting-row">
+                        <span class="setting-label">Save Analysis</span>
+                        <button class="btn-sm active" id="saveToggle" onclick="toggleSave()">Enabled</button>
+                    </div>
+                </div>
+
+                <div class="section-divider"></div>
+
+                <!-- TELEGRAM -->
+                <div class="setting-section">
+                    <div class="section-header">&#128172; Telegram Alerts</div>
+                    <div id="tgContent">
+                        <input class="s-input" id="tgToken" placeholder="Paste your Bot Token here...">
+                        <div style="margin-top:8px">
+                            <button class="btn-sm" onclick="connectTelegram()">Connect Bot</button>
+                        </div>
+                    </div>
+                    <div id="tgQrArea" style="display:none">
+                        <div class="tg-status waiting">
+                            <span>&#9679;</span> Waiting for you to press Start on Telegram...
+                        </div>
+                        <div class="tg-qr" id="tgQr"></div>
+                    </div>
+                    <div id="tgConnected" style="display:none">
+                        <div class="tg-status connected">
+                            <span>&#10003;</span> Telegram linked successfully
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-divider"></div>
+
+                <!-- API KEY -->
+                <div class="setting-section">
+                    <div class="section-header">&#128274; API Key</div>
+                    <input class="s-input" id="apiKeyInput" type="password" placeholder="API Key">
+                    <div style="margin-top:8px">
+                        <button class="btn-sm" onclick="saveApiKey()">Update Key</button>
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="save-bar">
+                <button class="btn-save" id="saveBtn" onclick="saveAllSettings()">Apply Settings</button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // ── STATE ──
+        let apiKey = localStorage.getItem('vf_api_key') || 'visionflow_secret_123';
+        let currentCam = '';
+        let saveEnabled = true;
+        let vlmProvider = 'gemini';
+        let alertKeywords = ['pericolo','arma','fumo','incendio','intruso','sospetto','caduta','persona'];
+        let activeClasses = new Set([0, 2, 3, 5, 7, 15, 16]);
+
+        const YOLO_CLASSES = {
+            0: 'Person', 1: 'Bicycle', 2: 'Car', 3: 'Motorcycle',
+            5: 'Bus', 7: 'Truck', 14: 'Bird', 15: 'Cat',
+            16: 'Dog', 17: 'Horse', 24: 'Backpack', 25: 'Umbrella',
+            26: 'Handbag', 28: 'Suitcase', 39: 'Bottle', 56: 'Chair',
+            57: 'Couch', 62: 'TV', 63: 'Laptop', 67: 'Phone'
+        };
+
+        // ── PWA ──
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js').catch(() => {});
+        }
+
+        // ── INIT ──
+        document.getElementById('apiKeyInput').value = apiKey;
+
+        async function init() {
+            try {
+                const r = await apiFetch('/cameras');
+                const data = await r.json();
+                const sel = document.getElementById('camSelect');
+                sel.innerHTML = '';
+                data.cameras.forEach(c => {
+                    const o = document.createElement('option');
+                    o.value = c; o.textContent = c;
+                    sel.appendChild(o);
+                });
+                currentCam = data.cameras[0];
+                updateStream();
+            } catch (e) { console.error(e); }
+
+            try {
+                const r = await apiFetch('/mission');
+                const data = await r.json();
+                document.getElementById('missionInput').value = data.mission;
+            } catch (e) {}
+
+            renderClassGrid();
+            renderKeywords();
+        }
+
+        function apiFetch(path, opts = {}) {
+            const sep = path.includes('?') ? '&' : '?';
+            return fetch(`${path}${sep}api_key=${apiKey}`, opts);
+        }
+
+        // ── STREAM ──
+        function updateStream() {
+            if (!currentCam) return;
+            document.getElementById('videoFeed').src = `/video_feed/${currentCam}?api_key=${apiKey}`;
+        }
+
+        function changeCamera() {
+            currentCam = document.getElementById('camSelect').value;
+            updateStream();
+        }
+
+        // ── ANALYSIS POLLING ──
+        async function pollAnalysis() {
+            if (!currentCam) return;
+            try {
+                const r = await apiFetch('/latest_analysis');
+                const data = await r.json();
+                document.getElementById('analysisText').textContent = data.analysis;
+
+                const dot = document.getElementById('statusDot');
+                const txt = document.getElementById('statusText');
+                if (data.is_thinking) {
+                    dot.className = 'pulse-dot thinking';
+                    txt.textContent = 'Analyzing...';
+                } else {
+                    dot.className = 'pulse-dot';
+                    txt.textContent = 'Live';
+                }
+
+                document.getElementById('frameChip').style.display = 'flex';
+                document.getElementById('frameCount').textContent = data.frame_count;
+            } catch (e) {}
+        }
+
+        setInterval(pollAnalysis, 1500);
+
+        // ── ASK ──
+        async function sendQuery() {
+            const input = document.getElementById('askInput');
+            const q = input.value.trim();
+            if (!q) return;
+            input.value = '';
+            await apiFetch('/ask', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({prompt: q})
+            });
+        }
+
+        // ── MISSION ──
+        async function updateMission() {
+            const m = document.getElementById('missionInput').value.trim();
+            if (!m) return;
+            await apiFetch('/mission', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({mission: m})
+            });
+            flashSave('Mission updated');
+        }
+
+        // ── SETTINGS PANEL ──
+        function toggleSettings() {
+            document.getElementById('settingsPanel').classList.toggle('collapsed');
+        }
+
+        // ── CLASS GRID ──
+        function renderClassGrid() {
+            const grid = document.getElementById('classGrid');
+            grid.innerHTML = '';
+            for (const [id, name] of Object.entries(YOLO_CLASSES)) {
+                const chip = document.createElement('div');
+                chip.className = 'class-chip' + (activeClasses.has(Number(id)) ? ' active' : '');
+                chip.textContent = name;
+                chip.onclick = () => {
+                    const nid = Number(id);
+                    if (activeClasses.has(nid)) activeClasses.delete(nid);
+                    else activeClasses.add(nid);
+                    chip.classList.toggle('active');
+                };
+                grid.appendChild(chip);
+            }
+        }
+
+        // ── KEYWORDS ──
+        function renderKeywords() {
+            const container = document.getElementById('keywordTags');
+            container.innerHTML = '';
+            alertKeywords.forEach((kw, i) => {
+                const tag = document.createElement('span');
+                tag.className = 'tag';
+                tag.innerHTML = `${kw} <span class="tag-remove" onclick="removeKeyword(${i})">&times;</span>`;
+                container.appendChild(tag);
+            });
+        }
+
+        function addKeyword() {
+            const input = document.getElementById('newKeyword');
+            const kw = input.value.trim().toLowerCase();
+            if (kw && !alertKeywords.includes(kw)) {
+                alertKeywords.push(kw);
+                renderKeywords();
+            }
+            input.value = '';
+        }
+
+        function removeKeyword(i) {
+            alertKeywords.splice(i, 1);
+            renderKeywords();
+        }
+
+        // ── SAVE TOGGLE ──
+        function toggleSave() {
+            saveEnabled = !saveEnabled;
+            const btn = document.getElementById('saveToggle');
+            btn.textContent = saveEnabled ? 'Enabled' : 'Disabled';
+            btn.classList.toggle('active', saveEnabled);
+        }
+
+        // ── PROVIDER ──
+        function setProvider(p) {
+            vlmProvider = p;
+            document.getElementById('btnGemini').classList.toggle('active', p === 'gemini');
+            document.getElementById('btnGroq').classList.toggle('active', p === 'groq');
+            document.getElementById('providerTag').textContent = 'YOLO26 + ' + p.toUpperCase();
+            document.getElementById('providerHint').textContent = p === 'gemini'
+                ? 'Using Google Gemini 3.1 Flash Lite'
+                : 'Using Groq Llama 4 Scout';
+        }
+
+        // ── APPLY ALL ──
+        async function saveAllSettings() {
+            const conf = document.getElementById('confSlider').value;
+            const interval = document.getElementById('intervalSlider').value;
+            const res = document.getElementById('resSelect').value;
+            const [w, h] = res.split('x').map(Number);
+
+            const settings = {
+                confidence_threshold: parseFloat(conf),
+                vlm_interval: parseInt(interval),
+                trigger_classes: [...activeClasses],
+                alert_keywords: [...alertKeywords],
+                display_width: w,
+                display_height: h,
+                save_analysis: saveEnabled,
+                vlm_provider: vlmProvider
+            };
+
+            try {
+                await apiFetch('/settings', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(settings)
+                });
+                flashSave('Settings applied');
+            } catch (e) {
+                flashSave('Error saving', true);
+            }
+        }
+
+        function flashSave(msg, error = false) {
+            const btn = document.getElementById('saveBtn');
+            const orig = btn.textContent;
+            btn.textContent = msg;
+            if (!error) btn.classList.add('saved');
+            setTimeout(() => {
+                btn.textContent = orig;
+                btn.classList.remove('saved');
+            }, 1500);
+        }
+
+        // ── API KEY ──
+        function saveApiKey() {
+            const k = document.getElementById('apiKeyInput').value.trim();
+            if (k) {
+                apiKey = k;
+                localStorage.setItem('vf_api_key', k);
+                updateStream();
+                flashSave('Key updated');
+            }
+        }
+
+        // ── TELEGRAM ──
+        async function connectTelegram() {
+            const token = document.getElementById('tgToken').value.trim();
+            if (!token) return;
+            try {
+                const r = await apiFetch('/register_token', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({token})
+                });
+                if (r.ok) {
+                    const data = await r.json();
+                    document.getElementById('tgContent').style.display = 'none';
+                    document.getElementById('tgQrArea').style.display = 'block';
+                    const url = `https://t.me/${data.bot_username}?start=visionflow`;
+                    document.getElementById('tgQr').innerHTML =
+                        `<a href="${url}" target="_blank"><img src="https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(url)}&bgcolor=09090b&color=22d3ee" style="margin-top:8px"></a>
+                         <div class="tg-qr-hint">Scan or tap to open in Telegram, then press Start</div>`;
+                    pollChatId();
+                }
+            } catch (e) {}
+        }
+
+        function pollChatId() {
+            const iv = setInterval(async () => {
+                try {
+                    const r = await apiFetch('/poll_chat_id');
+                    const data = await r.json();
+                    if (data.status === 'success') {
+                        clearInterval(iv);
+                        document.getElementById('tgQrArea').style.display = 'none';
+                        document.getElementById('tgConnected').style.display = 'block';
+                    }
+                } catch (e) {}
+            }, 2500);
+        }
+
+        // ── START ──
+        init();
+    </script>
+</body>
+</html>

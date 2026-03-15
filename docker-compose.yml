@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  vision-flow:
+    build: .
+    container_name: visionflow_app
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./.env:/app/.env
+      - ./outputs:/app/outputs
+    devices:
+      - "/dev/video0:/dev/video0"
+    environment:
+      - PYTHONUNBUFFERED=1

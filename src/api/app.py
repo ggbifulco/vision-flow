@@ -45,46 +45,80 @@ app.include_router(video.router)
 app.include_router(analysis.router)
 app.include_router(config.router)
 
+def _tg_send(token, chat_id, text):
+    requests.post(
+        f"https://api.telegram.org/bot{token}/sendMessage",
+        data={"chat_id": chat_id, "text": text},
+        timeout=5,
+    )
+
 def telegram_worker():
-    """Thread di background per ascoltare comandi da Telegram."""
+    """Background thread: listens for Telegram commands and auto-registers subscribers."""
     last_update_id = 0
-    logger.info("Telegram Worker avviato (In ascolto comandi...)")
-    
+    logger.info("Telegram Worker started (listening for commands...)")
+
     while True:
         token = Settings.TELEGRAM_TOKEN
         if not token:
             time.sleep(10)
             continue
-            
+
         try:
             url = f"https://api.telegram.org/bot{token}/getUpdates"
             params = {"offset": last_update_id + 1, "timeout": 30}
             response = requests.get(url, params=params, timeout=35)
             data = response.json()
-            
+
             if data.get("ok"):
                 for update in data["result"]:
                     last_update_id = update["update_id"]
-                    if "message" in update and "text" in update["message"]:
-                        text = update["message"]["text"]
-                        chat_id = update["message"]["chat"]["id"]
-                        
-                        if text.startswith("/mission"):
-                            new_mission = text.replace("/mission", "").strip()
-                            if new_mission:
-                                Settings.DEFAULT_MISSION = new_mission
-                                msg = f"✅ Missione aggiornata: {new_mission}"
-                                requests.post(f"https://api.telegram.org/bot{token}/sendMessage", 
-                                             data={"chat_id": chat_id, "text": msg})
-                                logger.info(f"Nuova missione da Telegram: {new_mission}")
-                            else:
-                                msg = "Uso: /mission <tua nuova missione>"
-                                requests.post(f"https://api.telegram.org/bot{token}/sendMessage", 
-                                             data={"chat_id": chat_id, "text": msg})
+                    msg = update.get("message", {})
+                    text = msg.get("text", "")
+                    chat_id = str(msg.get("chat", {}).get("id", ""))
+                    if not chat_id:
+                        continue
+
+                    if text.startswith("/start"):
+                        if chat_id not in Settings.TELEGRAM_CHAT_IDS:
+                            Settings.TELEGRAM_CHAT_IDS.add(chat_id)
+                            Settings.persist_chat_ids()
+                            logger.info(f"New Telegram subscriber: {chat_id} (total: {len(Settings.TELEGRAM_CHAT_IDS)})")
+                            _tg_send(token, chat_id,
+                                "✅ Subscribed to VisionFlow alerts!\n"
+                                "You'll receive notifications when threats are detected.\n\n"
+                                "Commands:\n"
+                                "  /mission <text> — set your personal AI mission\n"
+                                "  /stop — unsubscribe"
+                            )
+                        else:
+                            _tg_send(token, chat_id, "✅ You're already subscribed to VisionFlow alerts.")
+
+                    elif text.startswith("/test"):
+                        _tg_send(token, chat_id, "🧪 VisionFlow test — connection is working!\nYou'll receive alerts when threats are detected.")
+
+                    elif text.startswith("/stop"):
+                        Settings.TELEGRAM_CHAT_IDS.discard(chat_id)
+                        Settings.persist_chat_ids()
+                        logger.info(f"Telegram subscriber removed: {chat_id}")
+                        _tg_send(token, chat_id, "🔕 Unsubscribed from VisionFlow alerts.")
+
+                    elif text.startswith("/mission"):
+                        new_mission = text.replace("/mission", "", 1).strip()
+                        if new_mission:
+                            Settings.USER_MISSIONS[chat_id] = new_mission
+                            _tg_send(token, chat_id, f"✅ Your mission updated:\n_{new_mission}_")
+                            logger.info(f"User {chat_id} set mission: {new_mission}")
+                        else:
+                            current = Settings.USER_MISSIONS.get(chat_id, Settings.DEFAULT_MISSION)
+                            _tg_send(token, chat_id,
+                                f"Your current mission:\n_{current}_\n\n"
+                                "To change it: /mission <your mission>"
+                            )
+
         except Exception as e:
             logger.error(f"Telegram Worker Error: {e}")
             time.sleep(5)
-        
+
         time.sleep(2)
 
 # Avvio del worker in un thread separato

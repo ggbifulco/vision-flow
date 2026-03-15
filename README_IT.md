@@ -1,129 +1,235 @@
-# VisionFlow: Monitoraggio Intelligente Multimodale in Tempo Reale
+<div align="center">
 
-[English Version](README.md) | **Versione Italiana**
+# 🔭 VisionFlow
 
-[![YOLO26](https://img.shields.io/badge/Model-YOLO26-red.svg)](https://ultralytics.com/)
-[![Gemini](https://img.shields.io/badge/VLM-Gemini_3.1-4285F4.svg)](https://ai.google.dev/)
-[![Groq](https://img.shields.io/badge/VLM-Groq_API-blue.svg)](https://groq.com/)
-[![FastAPI](https://img.shields.io/badge/Interface-FastAPI-green.svg)](https://fastapi.tiangolo.com/)
-[![PWA](https://img.shields.io/badge/Interface-PWA-orange.svg)](#-mobile-experience-pwa)
+### Monitoraggio Intelligente Multimodale in Tempo Reale
 
-VisionFlow è un motore di monitoraggio e analisi video multimodale avanzato. Utilizza **YOLO26** per il rilevamento oggetti in tempo reale come trigger intelligente e un **VLM cloud** per la comprensione semantica profonda della scena — nessun modello VLM locale richiesto.
+[English](README.md) · **Italiano**
 
-**Provider VLM supportati** (selezionabili a runtime dalla Dashboard):
-- **Google Gemini 3.1 Flash Lite** — veloce, leggero, default
-- **Groq (Llama 4 Scout 17B)** — ragionamento di alta qualità
+[![YOLO26](https://img.shields.io/badge/Detection-YOLO26-ef4444?style=for-the-badge)](https://ultralytics.com/)
+[![Gemini](https://img.shields.io/badge/VLM-Gemini_3.1-4285F4?style=for-the-badge&logo=google)](https://ai.google.dev/)
+[![Groq](https://img.shields.io/badge/VLM-Groq-F55036?style=for-the-badge)](https://groq.com/)
+[![FastAPI](https://img.shields.io/badge/API-FastAPI-009688?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com/)
+[![PWA](https://img.shields.io/badge/PWA-Ready-5A0FC8?style=for-the-badge&logo=pwa)](https://web.dev/progressive-web-apps/)
+[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 
----
+<br/>
 
-## Architettura
+> **YOLO26 rileva. Gemini capisce. Telegram avvisa. Tu sei sempre informato.**
 
-```
-Camera → YOLO (locale, tempo reale) → Smart Trigger → Cloud VLM (Gemini / Groq) → Alert
-```
+<br/>
 
-- **YOLO26** gira localmente e gestisce il rilevamento oggetti in tempo reale a 30+ FPS.
-- Quando una condizione di trigger viene soddisfatta (persone, veicoli, animali rilevati), un frame viene inviato al **VLM cloud** selezionato.
-- Il VLM esegue l'analisi semantica della scena e restituisce una descrizione dettagliata in ~1-2 secondi.
-- Gli alert vengono inviati tramite la Dashboard Web e Telegram.
+</div>
 
 ---
 
-## Caratteristiche Principali
+## Cos'è VisionFlow?
 
--   **Dual-Engine Inference**: Rilevamento oggetti in tempo reale (YOLO26, locale) combinato con ragionamento semantico profondo (Gemini o Groq, cloud).
--   **VLM Multi-Provider**: Passa tra **Google Gemini** e **Groq** a runtime dalla Dashboard — nessun riavvio necessario.
--   **Missione IA Dinamica**: Cambia l'obiettivo dell'IA in tempo reale via Dashboard Web o tramite **comando Telegram** (`/mission <testo>`).
--   **Supporto Multi-Camera**: Gestisci più flussi video (Webcam, RTSP, File) da un'unica interfaccia.
--   **Smart Triggering**: L'analisi VLM si attiva solo quando YOLO rileva classi specifiche (persone, veicoli, animali), mantenendo efficienti le chiamate cloud.
--   **Dashboard Web Interattiva**: UI moderna Dark con streaming live MJPEG, selettore provider e Q&A interattivo.
--   **Auto-Config Telegram**: Collegamento istantaneo tramite **QR Code** per ricevere alert e screenshot sul cellulare.
--   **PWA Ready**: Installa VisionFlow sul tuo smartphone come app nativa per un'esperienza mobile a tutto schermo.
--   **Sicurezza e Persistenza**: Protetto da **API Key** (Header/Query) con logging CSV automatico e archivio screenshot.
+VisionFlow è un sistema di video intelligence in tempo reale, self-hosted, che combina **rilevamento oggetti edge** con **ragionamento visivo cloud** — accessibile da una dashboard web o dal tuo telefono.
+
+Punta una camera su qualsiasi cosa. VisionFlow monitora 24/7, avvia un'analisi AI quando succede qualcosa di interessante e ti manda un report strutturato su Telegram — con livello di minaccia, rilevamento armi e descrizione della scena.
+
+Nessuna GPU necessaria. Gira su qualsiasi laptop o Raspberry Pi.
+
+---
+
+## Come funziona
+
+```
+┌─────────────┐     ┌──────────────────┐     ┌─────────────────────┐     ┌──────────────┐
+│  Webcam /   │────▶│  YOLO26          │────▶│  Cloud VLM          │────▶│  Telegram    │
+│  IP Camera  │     │  (locale, 30FPS) │     │  Gemini 3.1 / Groq  │     │  + Dashboard │
+└─────────────┘     └──────────────────┘     └─────────────────────┘     └──────────────┘
+                           │
+                    Smart Trigger
+                    (si attiva solo quando
+                    vengono rilevate classi
+                    di interesse)
+```
+
+1. **YOLO26** gira localmente, rileva oggetti a 30+ FPS senza costi cloud
+2. Quando viene rilevata una classe trigger (persona, veicolo, ecc.) un frame viene inviato al **VLM**
+3. Il VLM restituisce un'analisi strutturata — livello di minaccia, armi, descrizione scena
+4. Se le keyword di alert matchano (es. `Armed: YES`), viene inviata una **notifica Telegram** a tutti i subscriber
+5. Tutto è visibile in tempo reale sulla **Dashboard Web**
+
+---
+
+## Funzionalità
+
+| Funzione | Dettagli |
+|---|---|
+| 🎯 **Smart Triggering** | Il VLM si attiva solo quando YOLO rileva classi rilevanti — nessuna chiamata API sprecata |
+| 🔀 **VLM Multi-Provider** | Passa tra Gemini 3.1 Flash Lite e Groq a runtime, senza riavvio |
+| 📱 **Alert Telegram** | Multi-subscriber, missioni per utente, persistenti ai riavvii |
+| 🎯 **Missioni AI Personali** | Ogni subscriber Telegram imposta la propria `/mission` — riceve la sua analisi personalizzata |
+| 🌐 **Dashboard Web** | Stream MJPEG live, analisi AI in tempo reale, pannello config completo |
+| 📲 **PWA** | Installabile come app nativa su iPhone/Android |
+| 🔐 **API Key Auth** | Tutti gli endpoint protetti via header o query param |
+| 🗃️ **Multi-Camera** | Webcam, stream RTSP, file video — tutto da un'unica UI |
+| 🧠 **Output Strutturato** | Il prompt default restituisce conteggio persone, armato S/N, tipo arma, livello minaccia |
+| 💾 **Persistenza** | Subscriber, token e impostazioni sopravvivono ai riavvii del server |
 
 ---
 
 ## Guida Rapida
 
-### 1. Installazione
+### 1. Clona e installa
+
 ```bash
 git clone https://github.com/ggbifulco/vision-flow.git
 cd vision-flow
 pip install -r requirements.txt
 ```
 
-### 2. Configurazione
-Copia il file di ambiente di esempio e aggiungi le tue chiavi:
+### 2. Configura
+
 ```bash
 cp .env.example .env
 ```
-Modifica `.env` con i tuoi valori:
+
+Minimo richiesto — modifica `.env`:
+
 ```env
 # Provider VLM: "gemini" (default) o "groq"
 VLM_PROVIDER=gemini
-
-# Google Gemini
-GEMINI_API_KEY=tua_chiave_api_gemini
-
-# Groq (opzionale, solo se usi Groq)
-GROQ_API_KEY=tua_chiave_api_groq
-
-# Telegram (opzionale)
-TELEGRAM_TOKEN=tuo_token_bot
-
-# Sicurezza API
-VISIONFLOW_API_KEY=tua_chiave_segreta
+GEMINI_API_KEY=la_tua_chiave_gemini
 ```
 
-### 3. Avvio
-- **Web Dashboard (predefinita)**:
-  ```bash
-  python main.py --mode web
-  ```
-  Apri `http://localhost:8000` (Chiave Default: `visionflow_secret_123`).
+Tutto il resto (token Telegram, keyword alert, intervallo VLM) si configura live dalla dashboard.
 
-- **Modalità locale** (senza web server, solo output nel terminale):
-  ```bash
-  python main.py --mode local
-  ```
+### 3. Avvia
+
+```bash
+# Web dashboard (raccomandato)
+python main.py --mode web
+```
+
+Apri **http://localhost:8000** — chiave API di default: `visionflow_secret_123`
+
+```bash
+# Finestra OpenCV locale (senza browser)
+python main.py --mode local
+```
 
 ---
 
-## Endpoint API
+## Setup Telegram
+
+VisionFlow usa un modello bot self-hosted — il bot è tuo, i subscriber sono tuoi, i dati sono tuoi.
+
+**Per te (una volta sola):**
+1. Apri la dashboard → Settings → sezione Telegram
+2. Clicca **Open BotFather**, invia `/newbot`, ottieni il token
+3. Incolla il token → clicca **Connect Bot**
+4. Il token viene salvato nel `.env` e persiste ai riavvii
+
+**Per i tuoi utenti (un tap):**
+1. Scansionano il QR code mostrato nella dashboard (o toccano il link)
+2. Premono **Start** su Telegram
+3. Sono iscritti — gli alert arrivano automaticamente
+
+**Comandi bot disponibili ai subscriber:**
+
+| Comando | Descrizione |
+|---|---|
+| `/start` | Iscriviti agli alert |
+| `/stop` | Disiscriviti |
+| `/mission <testo>` | Imposta una missione AI personale per i tuoi alert |
+| `/test` | Invia un messaggio di test per verificare la connessione |
+
+> Ogni subscriber può impostare la propria `/mission` e ricevere un'analisi personalizzata. Gli utenti con la stessa missione condividono una singola chiamata VLM per efficienza.
+
+---
+
+## Dashboard
+
+La dashboard web ti dà il controllo completo:
+
+- **Feed live** — stream MJPEG pulito, senza box YOLO che disturbano la visuale
+- **Pannello AI Analysis** — output strutturato che si aggiorna in tempo reale
+- **Chiedi all'AI** — scrivi una domanda e ottieni un'analisi VLM immediata sul frame corrente
+- **Pannello Settings** (slide-out):
+  - Selettore provider VLM (Gemini / Groq)
+  - Slider confidenza e intervallo VLM
+  - Griglia classi trigger (scegli quali classi YOLO attivano l'analisi)
+  - Editor keyword alert (tag)
+  - Selettore risoluzione
+  - Wizard setup Telegram con condivisione QR
+  - Gestione API key
+
+Tutte le impostazioni si applicano istantaneamente senza riavviare il server.
+
+---
+
+## API Reference
+
+Tutti gli endpoint richiedono auth: `?api_key=tua_chiave` o header `X-API-Key: tua_chiave`.
 
 | Metodo | Endpoint | Descrizione |
-|--------|----------|-------------|
-| GET | `/` | Dashboard Web |
-| GET | `/video_feed/{cam_id}` | Stream MJPEG di una camera |
-| GET | `/latest_analysis` | Risultato attuale dell'analisi VLM |
-| POST | `/ask` | Query VLM personalizzata sull'ultimo frame |
-| POST | `/mission` | Aggiorna la missione IA in tempo reale |
-| POST | `/settings` | Aggiorna tutte le impostazioni (incluso provider VLM) |
-| GET | `/cameras` | Elenco di tutte le camere configurate |
+|---|---|---|
+| `GET` | `/` | Dashboard Web |
+| `GET` | `/health` | Health check |
+| `GET` | `/video_feed/{cam}` | Stream MJPEG live |
+| `GET` | `/latest_analysis` | Risultato VLM corrente + stato thinking |
+| `POST` | `/ask` | Query VLM one-shot sul frame corrente |
+| `GET` | `/mission` | Ottieni missione AI corrente |
+| `POST` | `/mission` | Aggiorna missione AI |
+| `GET` | `/current_settings` | Ottieni tutte le impostazioni correnti |
+| `POST` | `/settings` | Aggiorna impostazioni (provider, keyword, classi…) |
+| `GET` | `/cameras` | Lista camere configurate |
+| `GET` | `/telegram_status` | Stato bot + contatore subscriber |
+| `POST` | `/register_token` | Salva token bot Telegram |
+| `POST` | `/telegram_test` | Invia alert di test a tutti i subscriber |
 
 ---
 
-## Telegram e Controllo Remoto
-- **Auto-Pairing**: Incolla il token nella Dashboard, scansiona il **QR Code**, e premi **Start**.
-- **Missione Remota**: Invia `/mission Controlla se il cane sta dormendo` per cambiare il focus dell'IA istantaneamente da ovunque.
+## Missione AI di Default
+
+Di default, VisionFlow usa un prompt strutturato orientato alla sicurezza:
+
+```
+Analyze this scene for security threats. Respond in this exact structured format:
+- People detected: [number]
+- Armed: [YES / NO]
+- Weapon type: [type or N/A]
+- Threat level: [LOW / MEDIUM / HIGH / CRITICAL]
+- Description: [brief description of the scene and any suspicious behavior]
+```
+
+La keyword di alert di default è `Armed: YES` — la notifica Telegram scatta solo quando viene rilevata un'arma. Puoi cambiare sia la missione che le keyword dalla dashboard.
 
 ---
 
 ## Requisiti Hardware
 
-Dato che il VLM gira nel **cloud** (Gemini o Groq), VisionFlow è veloce anche su macchine con sola CPU. Nessuna GPU necessaria.
+| Componente | Requisito |
+|---|---|
+| CPU | Qualsiasi x86/ARM moderno — nessuna GPU richiesta |
+| RAM | ~500MB a riposo |
+| Camera | Webcam USB, IP camera (RTSP), o file video |
+| Rete | Connessione internet per le chiamate API VLM |
+| Python | 3.11+ |
 
-- **YOLO** gira localmente ed è sufficientemente leggero per qualsiasi CPU moderna.
-- **VLM** gira sul cloud — tutto ciò che serve è una chiave API e una connessione internet.
-- Aspettati 30+ FPS per il rilevamento YOLO e ~1-2s per l'analisi semantica.
-
----
-
-## Sicurezza API
-Accedi agli endpoint programmaticamente usando:
-- **Header**: `X-API-Key: tua_chiave`
-- **Query**: `?api_key=tua_chiave`
+YOLO26 gira localmente ed è ottimizzato per l'inferenza CPU (43% più veloce della v11). Il VLM gira nel cloud — latenza ~1-2s per analisi, ma l'analisi si attiva solo quando viene rilevato qualcosa di rilevante.
 
 ---
 
-**Autore**: [Giuseppe Gerardo Bifulco](https://tuo-portfolio.vercel.app)
+## Variabili d'Ambiente
+
+| Variabile | Richiesta | Default | Descrizione |
+|---|---|---|---|
+| `VLM_PROVIDER` | No | `gemini` | Backend VLM: `gemini` o `groq` |
+| `GEMINI_API_KEY` | Se usi Gemini | — | Chiave Google AI Studio |
+| `GROQ_API_KEY` | Se usi Groq | — | Chiave Groq Console |
+| `TELEGRAM_TOKEN` | No | — | Impostato dalla dashboard, auto-salvato |
+| `TELEGRAM_CHAT_IDS` | No | — | Gestito automaticamente dall'app |
+| `VISIONFLOW_API_KEY` | No | `visionflow_secret_123` | Chiave auth dashboard/API |
+
+---
+
+<div align="center">
+
+Realizzato da [Giuseppe Gerardo Bifulco](https://tuo-portfolio.vercel.app)
+
+</div>

@@ -1,4 +1,5 @@
 import logging
+import os
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -63,6 +64,59 @@ async def update_settings(request: SettingsUpdate, api_key: str = Depends(get_ap
     logger.info("Settings updated from dashboard")
     return {"status": "success"}
 
+@router.get("/telegram_status")
+async def telegram_status(api_key: str = Depends(get_api_key)):
+    has_token = bool(Settings.TELEGRAM_TOKEN)
+    bot_username = None
+    if has_token:
+        try:
+            r = requests.get(f"https://api.telegram.org/bot{Settings.TELEGRAM_TOKEN}/getMe", timeout=5)
+            d = r.json()
+            if d.get("ok"):
+                bot_username = d["result"]["username"]
+        except Exception:
+            pass
+    return {
+        "has_token": has_token,
+        "bot_username": bot_username,
+        "subscriber_count": len(Settings.TELEGRAM_CHAT_IDS),
+    }
+
+@router.post("/telegram_test")
+async def telegram_test(api_key: str = Depends(get_api_key)):
+    token = Settings.TELEGRAM_TOKEN
+    chat_ids = list(Settings.TELEGRAM_CHAT_IDS)
+    if not token:
+        return JSONResponse(content={"error": "No bot token configured."}, status_code=400)
+    if not chat_ids:
+        return JSONResponse(content={"error": "No subscribers yet. Open your bot in Telegram and press Start first."}, status_code=400)
+    sent = 0
+    for cid in chat_ids:
+        try:
+            requests.post(
+                f"https://api.telegram.org/bot{token}/sendMessage",
+                data={"chat_id": cid, "text": "🧪 VisionFlow test alert — connection is working!"},
+                timeout=5,
+            )
+            sent += 1
+        except Exception as e:
+            logger.error(f"Test alert failed for {cid}: {e}")
+    return {"sent": sent, "total": len(chat_ids)}
+
+@router.get("/current_settings")
+async def current_settings(api_key: str = Depends(get_api_key)):
+    return {
+        "confidence_threshold": Settings.CONFIDENCE_THRESHOLD,
+        "vlm_interval": Settings.VLM_INTERVAL,
+        "trigger_classes": Settings.TRIGGER_CLASSES,
+        "alert_keywords": Settings.ALERT_KEYWORDS,
+        "display_width": Settings.DISPLAY_WIDTH,
+        "display_height": Settings.DISPLAY_HEIGHT,
+        "save_analysis": Settings.SAVE_ANALYSIS,
+        "vlm_provider": Settings.VLM_PROVIDER,
+        "default_mission": Settings.DEFAULT_MISSION,
+    }
+
 @router.get("/cameras")
 async def list_cameras(api_key: str = Depends(get_api_key)):
     return {"cameras": list(Settings.SOURCES.keys())}
@@ -71,12 +125,41 @@ async def list_cameras(api_key: str = Depends(get_api_key)):
 async def register_token(request: TelegramSetupRequest, api_key: str = Depends(get_api_key)):
     url = f"https://api.telegram.org/bot{request.token}/getMe"
     try:
-        response = requests.get(url)
+        response = requests.get(url, timeout=5)
         data = response.json()
-        if not data.get("ok"): return JSONResponse(content={"error": "Invalid"}, status_code=400)
+        if not data.get("ok"):
+            return JSONResponse(content={"error": "Invalid token — make sure you copied it correctly from BotFather."}, status_code=400)
+        # Persist token to .env so it survives restarts
+        from dotenv import set_key
+        from pathlib import Path
+        env_path = Path(__file__).resolve().parent.parent.parent.parent / ".env"
+        env_path.touch(exist_ok=True)
+        set_key(str(env_path), "TELEGRAM_TOKEN", request.token, quote_mode="never")
         Settings.TELEGRAM_TOKEN = request.token
-        return {"bot_username": data["result"]["username"]}
-    except Exception as e: return JSONResponse(content={"error": str(e)}, status_code=500)
+        os.environ["TELEGRAM_TOKEN"] = request.token
+        logger.info(f"Telegram bot configured: @{data['result']['username']}")
+
+        # Auto-register anyone who already interacted with this bot
+        token = request.token
+        try:
+            upd = requests.get(f"https://api.telegram.org/bot{token}/getUpdates", timeout=5).json()
+            for update in upd.get("result", []):
+                chat_id = str(update.get("message", {}).get("chat", {}).get("id", ""))
+                if chat_id and chat_id not in Settings.TELEGRAM_CHAT_IDS:
+                    Settings.TELEGRAM_CHAT_IDS.add(chat_id)
+                    Settings.persist_chat_ids()
+                    requests.post(
+                        f"https://api.telegram.org/bot{token}/sendMessage",
+                        data={"chat_id": chat_id, "text": "✅ Connected to VisionFlow! You'll receive alerts when threats are detected.\n\nSend /stop to unsubscribe."},
+                        timeout=5,
+                    )
+                    logger.info(f"Auto-registered existing subscriber: {chat_id}")
+        except Exception as e:
+            logger.warning(f"Could not fetch existing subscribers: {e}")
+
+        return {"bot_username": data["result"]["username"], "subscribers": len(Settings.TELEGRAM_CHAT_IDS)}
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
 
 @router.get("/poll_chat_id")
 async def poll_chat_id(api_key: str = Depends(get_api_key)):

@@ -24,25 +24,34 @@ class Settings:
     # --- Notification Settings ---
     ENABLE_NOTIFICATIONS = True  # Enable/disable Telegram alert notifications
     TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")  # Telegram bot token
-    TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")  # Telegram chat ID for alerts
+    TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")  # Legacy single chat ID (kept for .env compat)
+    TELEGRAM_CHAT_IDS: set = set(
+        cid.strip() for cid in os.getenv("TELEGRAM_CHAT_IDS", os.getenv("TELEGRAM_CHAT_ID", "")).split(",") if cid.strip()
+    )  # Set of all subscribed chat IDs (supports multiple users)
+
+    USER_MISSIONS: dict = {}  # Per-user mission: {chat_id: mission_text}
     ALERT_KEYWORDS = [  # Keywords that trigger alert notifications when found in VLM output
-        "pericolo", "arma", "fumo", "incendio",
-        "intruso", "sospetto", "caduta", "persona",
+        "Armed: YES"
     ]
 
     # --- Storage Settings ---
     LOGS_PATH = "outputs/analysis_logs.csv"  # CSV log file path for analysis records
     SCREENSHOTS_DIR = "outputs/screenshots"  # Directory for saved alert screenshots
-    SAVE_ANALYSIS = True  # Whether to persist analysis results to disk
+    SAVE_ANALYSIS = False  # Whether to persist analysis results to disk
 
     # --- Security Settings ---
     API_KEY = os.getenv("VISIONFLOW_API_KEY", "visionflow_secret_123")  # API key for the REST interface
 
     # --- Intelligence Settings ---
     DEFAULT_MISSION = (  # Default prompt sent to VLM when no user query is provided
-        "Cosa sta succedendo in questa scena? Descrivi brevemente l'azione principale."
+        "Analyze this scene for security threats. Respond in this exact structured format:\n"
+        "- People detected: [number]\n"
+        "- Armed: [YES / NO]\n"
+        "- Weapon type: [type or N/A]\n"
+        "- Threat level: [LOW / MEDIUM / HIGH / CRITICAL]\n"
+        "- Description: [brief description of the scene and any suspicious behavior]"
     )
-    TRIGGER_CLASSES = [0, 15, 16, 2, 3, 5, 7]  # YOLO class IDs that trigger VLM analysis
+    TRIGGER_CLASSES = [0]  # YOLO class IDs that trigger VLM analysis
 
     # --- Streaming Settings ---
     SOURCES = {  # Video source dictionary: {"name": source}
@@ -52,6 +61,12 @@ class Settings:
     VLM_INTERVAL = 5  # Minimum seconds between consecutive VLM analyses
     DISPLAY_WIDTH = 640  # Display window width in pixels
     DISPLAY_HEIGHT = 480  # Display window height in pixels
+
+    @classmethod
+    def persist_chat_ids(cls):
+        """Persist current TELEGRAM_CHAT_IDS to .env so they survive restarts."""
+        _ENV_PATH.touch(exist_ok=True)
+        set_key(str(_ENV_PATH), "TELEGRAM_CHAT_IDS", ",".join(cls.TELEGRAM_CHAT_IDS), quote_mode="never")
 
     @classmethod
     def save_telegram_config(cls, token: str, chat_id: str):

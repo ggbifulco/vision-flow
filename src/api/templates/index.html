@@ -763,21 +763,42 @@
                 <!-- TELEGRAM -->
                 <div class="setting-section">
                     <div class="section-header">&#128172; Telegram Alerts</div>
-                    <div id="tgContent">
-                        <input class="s-input" id="tgToken" placeholder="Paste your Bot Token here...">
-                        <div style="margin-top:8px">
-                            <button class="btn-sm" onclick="connectTelegram()">Connect Bot</button>
+
+                    <!-- STEP 1: No token → wizard -->
+                    <div id="tgWizard" style="display:none">
+                        <div style="display:flex;flex-direction:column;gap:10px">
+                            <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px">
+                                <div style="font-size:0.7rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Step 1 — Create your bot</div>
+                                <p style="font-size:0.78rem;color:var(--text-dim);margin-bottom:8px">Open BotFather on Telegram, send <code style="color:var(--accent)">/newbot</code>, choose a name and username.</p>
+                                <a href="https://t.me/BotFather?start=newbot" target="_blank" class="btn-sm" style="display:inline-block;text-decoration:none;color:var(--accent);border-color:rgba(34,211,238,.3);background:var(--accent-dim)">
+                                    &#8599; Open BotFather
+                                </a>
+                            </div>
+                            <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px">
+                                <div style="font-size:0.7rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Step 2 — Paste your token</div>
+                                <p style="font-size:0.78rem;color:var(--text-dim);margin-bottom:8px">BotFather will give you a token like <code style="color:var(--accent)">123456:ABC-xyz...</code></p>
+                                <input class="s-input" id="tgTokenInput" placeholder="Paste token here..." style="margin-bottom:8px">
+                                <button class="btn-sm" id="tgSaveBtn" onclick="saveBotToken()">Connect Bot</button>
+                                <div id="tgTokenError" style="display:none;font-size:0.72rem;color:var(--danger);margin-top:6px"></div>
+                            </div>
                         </div>
                     </div>
-                    <div id="tgQrArea" style="display:none">
-                        <div class="tg-status waiting">
-                            <span>&#9679;</span> Waiting for you to press Start on Telegram...
+
+                    <!-- STEP 2: Token saved → configured state -->
+                    <div id="tgPairArea" style="display:none">
+                        <div class="tg-status connected" style="justify-content:space-between">
+                            <span>&#10003; Bot configured</span>
+                            <span style="font-size:0.72rem">Subscribers: <span id="tgSubCount" style="font-family:'JetBrains Mono',monospace">0</span></span>
                         </div>
-                        <div class="tg-qr" id="tgQr"></div>
-                    </div>
-                    <div id="tgConnected" style="display:none">
-                        <div class="tg-status connected">
-                            <span>&#10003;</span> Telegram linked successfully
+                        <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
+                            <button class="btn-sm" onclick="toggleTgQr()">Share QR</button>
+                            <button class="btn-sm" id="tgTestBtn" onclick="sendTestAlert()">Send Test</button>
+                            <button class="btn-sm" onclick="resetBotToken()">Change bot</button>
+                        </div>
+                        <div id="tgTestMsg" style="display:none;font-size:0.72rem;margin-top:6px"></div>
+                        <div id="tgQrCollapse" style="display:none;margin-top:10px">
+                            <p style="font-size:0.75rem;color:var(--text-dim);margin-bottom:8px">Share this with users to let them subscribe to alerts.</p>
+                            <div id="tgQr" style="text-align:center"></div>
                         </div>
                     </div>
                 </div>
@@ -828,6 +849,7 @@
         document.getElementById('apiKeyInput').value = apiKey;
 
         async function init() {
+            // Load cameras
             try {
                 const r = await apiFetch('/cameras');
                 const data = await r.json();
@@ -842,14 +864,36 @@
                 updateStream();
             } catch (e) { console.error(e); }
 
+            // Load current settings from server
             try {
-                const r = await apiFetch('/mission');
-                const data = await r.json();
-                document.getElementById('missionInput').value = data.mission;
-            } catch (e) {}
+                const r = await apiFetch('/current_settings');
+                const s = await r.json();
+
+                document.getElementById('missionInput').value = s.default_mission || '';
+                document.getElementById('confSlider').value = s.confidence_threshold;
+                document.getElementById('confValue').textContent = s.confidence_threshold;
+                document.getElementById('intervalSlider').value = s.vlm_interval;
+                document.getElementById('intervalValue').textContent = s.vlm_interval;
+
+                const [w, h] = [s.display_width, s.display_height];
+                const resSelect = document.getElementById('resSelect');
+                resSelect.value = `${w}x${h}`;
+
+                saveEnabled = s.save_analysis;
+                const saveBtn = document.getElementById('saveToggle');
+                saveBtn.textContent = saveEnabled ? 'Enabled' : 'Disabled';
+                saveBtn.classList.toggle('active', saveEnabled);
+
+                activeClasses = new Set(s.trigger_classes);
+                alertKeywords = s.alert_keywords;
+
+                vlmProvider = s.vlm_provider || 'gemini';
+                setProvider(vlmProvider);
+            } catch (e) { console.error(e); }
 
             renderClassGrid();
             renderKeywords();
+            initTelegram();
         }
 
         function apiFetch(path, opts = {}) {
@@ -1040,40 +1084,117 @@
         }
 
         // ── TELEGRAM ──
-        async function connectTelegram() {
-            const token = document.getElementById('tgToken').value.trim();
+        async function initTelegram() {
+            try {
+                const r = await apiFetch('/telegram_status');
+                const s = await r.json();
+                if (s.has_token && s.bot_username) {
+                    showTgSetup(false);
+                    renderTgQr(s.bot_username);
+                    updateSubCount(s.subscriber_count || 0);
+                    setInterval(refreshTgStatus, 5000);
+                } else {
+                    showTgSetup(true);
+                }
+            } catch (e) {}
+        }
+
+        function showTgSetup(needsSetup) {
+            document.getElementById('tgWizard').style.display   = needsSetup ? 'block' : 'none';
+            document.getElementById('tgPairArea').style.display = needsSetup ? 'none'  : 'block';
+        }
+
+        async function saveBotToken() {
+            const token = document.getElementById('tgTokenInput').value.trim();
             if (!token) return;
+            const btn = document.getElementById('tgSaveBtn');
+            const err = document.getElementById('tgTokenError');
+            btn.textContent = 'Connecting...';
+            btn.disabled = true;
+            err.style.display = 'none';
             try {
                 const r = await apiFetch('/register_token', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({token})
                 });
-                if (r.ok) {
-                    const data = await r.json();
-                    document.getElementById('tgContent').style.display = 'none';
-                    document.getElementById('tgQrArea').style.display = 'block';
-                    const url = `https://t.me/${data.bot_username}?start=visionflow`;
-                    document.getElementById('tgQr').innerHTML =
-                        `<a href="${url}" target="_blank"><img src="https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(url)}&bgcolor=09090b&color=22d3ee" style="margin-top:8px"></a>
-                         <div class="tg-qr-hint">Scan or tap to open in Telegram, then press Start</div>`;
-                    pollChatId();
+                const data = await r.json();
+                if (!r.ok) {
+                    err.textContent = data.error || 'Invalid token';
+                    err.style.display = 'block';
+                    btn.textContent = 'Connect Bot';
+                    btn.disabled = false;
+                    return;
                 }
+                showTgSetup(false);
+                renderTgQr(data.bot_username);
+                updateSubCount(0);
+                setInterval(refreshTgStatus, 5000);
+            } catch (e) {
+                err.textContent = 'Connection error. Try again.';
+                err.style.display = 'block';
+                btn.textContent = 'Connect Bot';
+                btn.disabled = false;
+            }
+        }
+
+        function resetBotToken() {
+            showTgSetup(true);
+            document.getElementById('tgTokenInput').value = '';
+        }
+
+        async function sendTestAlert() {
+            const btn = document.getElementById('tgTestBtn');
+            const msg = document.getElementById('tgTestMsg');
+            btn.textContent = 'Sending...';
+            btn.disabled = true;
+            try {
+                const r = await apiFetch('/telegram_test', {method: 'POST'});
+                const d = await r.json();
+                msg.style.display = 'block';
+                if (r.ok) {
+                    msg.style.color = 'var(--success)';
+                    msg.textContent = `✓ Sent to ${d.sent}/${d.total} subscriber(s)`;
+                } else {
+                    msg.style.color = 'var(--danger)';
+                    msg.textContent = `✗ ${d.error}`;
+                }
+            } catch(e) {
+                msg.style.display = 'block';
+                msg.style.color = 'var(--danger)';
+                msg.textContent = '✗ Request failed';
+            }
+            btn.textContent = 'Send Test';
+            btn.disabled = false;
+        }
+
+        function toggleTgQr() {
+            const el = document.getElementById('tgQrCollapse');
+            el.style.display = el.style.display === 'none' ? 'block' : 'none';
+        }
+
+        async function refreshTgStatus() {
+            try {
+                const r = await apiFetch('/telegram_status');
+                const s = await r.json();
+                updateSubCount(s.subscriber_count || 0);
             } catch (e) {}
         }
 
-        function pollChatId() {
-            const iv = setInterval(async () => {
-                try {
-                    const r = await apiFetch('/poll_chat_id');
-                    const data = await r.json();
-                    if (data.status === 'success') {
-                        clearInterval(iv);
-                        document.getElementById('tgQrArea').style.display = 'none';
-                        document.getElementById('tgConnected').style.display = 'block';
-                    }
-                } catch (e) {}
-            }, 2500);
+        function updateSubCount(n) {
+            const el = document.getElementById('tgSubCount');
+            if (el) el.textContent = n;
+        }
+
+        function renderTgQr(username) {
+            const url = `https://t.me/${username}?start=visionflow`;
+            document.getElementById('tgQr').innerHTML =
+                `<a href="${url}" target="_blank">
+                   <img src="https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(url)}&bgcolor=09090b&color=22d3ee" style="border-radius:8px;border:1px solid var(--border)">
+                 </a>
+                 <div style="margin-top:6px;font-size:0.7rem;color:var(--text-muted)">
+                   or tap: <a href="${url}" target="_blank" style="color:var(--accent)">@${username}</a>
+                 </div>`;
         }
 
         // ── START ──

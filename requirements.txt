@@ -1,11 +1,10 @@
 ultralytics
-transformers
-torch
-torchvision
 opencv-python
 fastapi
 uvicorn
 python-multipart
-timm
-einops
 pillow
+groq
+google-genai
+python-dotenv
+requests

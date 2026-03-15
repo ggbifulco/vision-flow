@@ -1,46 +1,66 @@
+import logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%H:%M:%S",
+)
+
 import cv2
+import argparse
+import uvicorn
 from src.core.engine import VisionFlowEngine
 from src.config.settings import Settings
+from src.api.app import app
 
-def run_vision_flow():
-    print("🚀 VisionFlow: Inizializzazione Multimodal Engine...")
+logger = logging.getLogger(__name__)
+
+def run_local_window():
+    """Avvia VisionFlow in una finestra OpenCV locale."""
+    logger.info("VisionFlow: Avvio in modalità Local Window...")
     engine = VisionFlowEngine()
-    
-    # 0 = Webcam locale. Puoi sostituire con un link RTSP o un path di un video.mp4
     cap = cv2.VideoCapture(0)
-    
+
     if not cap.isOpened():
-        print("[Error] Impossibile accedere alla webcam.")
+        logger.error("Impossibile accedere alla webcam.")
         return
 
-    print("[√] Stream avviato. Premi 'q' per uscire.")
+    logger.info("Stream avviato. Premi 'q' per uscire.")
 
     while True:
         ret, frame = cap.read()
         if not ret:
             break
 
-        # Ridimensioniamo per performance consistenti
         frame = cv2.resize(frame, (Settings.DISPLAY_WIDTH, Settings.DISPLAY_HEIGHT))
-
-        # Elaborazione frame tramite l'orchestratore
         processed_frame, analysis_text = engine.process_frame(frame)
 
-        # Mostra il risultato in tempo reale
-        cv2.imshow("BGG VisionFlow - YOLOv11 + Moondream2", processed_frame)
+        cv2.imshow("VisionFlow - YOLO26 + Groq VLM", processed_frame)
 
-        # Log dell'analisi in console se aggiornata
-        if engine.frame_count % 150 == 0:
-            print(f"
-[AI Analysis]: {analysis_text}")
-
-        # Tasto Q per uscire
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
     cap.release()
     cv2.destroyAllWindows()
-    print("[*] VisionFlow terminato correttamente.")
+    logger.info("VisionFlow terminato correttamente.")
+
+def run_web_api():
+    """Avvia VisionFlow come server FastAPI."""
+    logger.info("VisionFlow: Avvio in modalità Web Server (FastAPI)...")
+    logger.info("Endpoint streaming: http://localhost:8000/video_feed")
+    uvicorn.run(app, host="0.0.0.0", port=8000)
 
 if __name__ == "__main__":
-    run_vision_flow()
+    parser = argparse.ArgumentParser(description="VisionFlow: Real-time Multimodal Engine")
+    parser.add_argument(
+        "--mode", 
+        choices=["local", "web"], 
+        default="local", 
+        help="Modalità di esecuzione: 'local' per finestra OpenCV, 'web' per FastAPI server (default: local)"
+    )
+    
+    args = parser.parse_args()
+
+    if args.mode == "local":
+        run_local_window()
+    else:
+        run_web_api()

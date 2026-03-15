@@ -5,12 +5,7 @@ __pycache__/
 venv/
 env/
 .env
-
-# Models & Weights (Verranno scaricati all'avvio)
-*.pt
-*.onnx
-*.engine
-yolo11*.pt
+!.env.example
 
 # Media & Logs
 assets/*
@@ -21,3 +16,4 @@ outputs/*
 # OS
 .DS_Store
 Thumbs.db
+*.*

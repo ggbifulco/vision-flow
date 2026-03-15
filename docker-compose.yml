@@ -1,16 +1,39 @@
-version: '3.8'
-
 services:
-  vision-flow:
+  visionflow:
     build: .
-    container_name: visionflow_app
+    container_name: visionflow
     restart: unless-stopped
     ports:
       - "8000:8000"
-    volumes:
-      - ./.env:/app/.env
-      - ./outputs:/app/outputs
-    devices:
-      - "/dev/video0:/dev/video0"
+    env_file:
+      - .env
     environment:
       - PYTHONUNBUFFERED=1
+    volumes:
+      # Persist analysis outputs and screenshots
+      - ./outputs:/app/outputs
+      # Persist YOLO model cache (avoids re-downloading on restart)
+      - yolo_cache:/root/.config/Ultralytics
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # ── WEBCAM (Linux only) ──────────────────────────────────────────────────
+    # Uncomment if you want to use a local USB webcam inside Docker.
+    # On Windows/Mac use an IP camera (RTSP) instead — add it to Settings.SOURCES.
+    #
+    # devices:
+    #   - "/dev/video0:/dev/video0"
+    # group_add:
+    #   - video
+
+volumes:
+  yolo_cache:

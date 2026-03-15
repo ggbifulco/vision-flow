@@ -72,7 +72,37 @@ No GPU needed. Runs on any laptop or Raspberry Pi.
 
 ---
 
-## Quick Start
+## Docker (recommended)
+
+The easiest way to run VisionFlow in production.
+
+```bash
+git clone https://github.com/ggbifulco/vision-flow.git
+cd vision-flow
+cp .env.example .env
+# edit .env with your GEMINI_API_KEY
+docker compose up -d
+```
+
+Open **http://localhost:8000**. Logs: `docker compose logs -f`
+
+**Notes:**
+- On **Linux** with a USB webcam: uncomment the `devices` section in `docker-compose.yml`
+- On **Windows / Mac**: use an IP camera (RTSP URL) — add it to `Settings.SOURCES` in the dashboard
+- The YOLO model is downloaded on first run and cached in a Docker volume (`yolo_cache`) — no re-download on restart
+- Outputs and screenshots are persisted in `./outputs/`
+
+```bash
+# Rebuild after code changes
+docker compose up -d --build
+
+# Stop
+docker compose down
+```
+
+---
+
+## Quick Start (local)
 
 ### 1. Clone & install
 
@@ -228,8 +258,22 @@ YOLO26 runs locally and is optimized for CPU inference (43% faster than v11). Th
 
 ---
 
+---
+
+## References
+
+- [Ultralytics YOLO26](https://ultralytics.com/) — state-of-the-art real-time object detection
+- [Google Gemini API](https://ai.google.dev/) — multimodal vision-language model
+- [Groq](https://groq.com/) — ultra-fast LLM inference
+- [FastAPI](https://fastapi.tiangolo.com/) — modern Python web framework
+
+---
+
 <div align="center">
 
-Made by [Giuseppe Gerardo Bifulco](https://tuo-portfolio.vercel.app)
+Made by **Giuseppe Gerardo Bifulco**
+
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-ggbifulco-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/ggbifulco/)
+[![Portfolio](https://img.shields.io/badge/Portfolio-futureintelligence.space-black?style=for-the-badge&logo=vercel&logoColor=white)](https://futureintelligence.space/)
 
 </div>

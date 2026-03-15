@@ -1,11 +1,43 @@
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
-.env
-.venv
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+.venv/
 venv/
+env/
 ENV/
-outputs/
+
+# Secrets
+.env
+
+# Model weights (downloaded at runtime)
 *.pt
+*.onnx
+*.tflite
+
+# Outputs (mounted as volume)
+outputs/
+
+# Git
 .git/
 .gitignore
+.gitattributes
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Docs
+README*.md
+docs/
+
+# Claude / dev tooling
+.claude/

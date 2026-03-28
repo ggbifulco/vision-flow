@@ -3,13 +3,8 @@ FROM python:3.11-slim
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    # Prevent ultralytics from opening GUI
     MPLBACKEND=Agg
 
-# System dependencies
-# libgl1 + libglib2.0-0 → OpenCV headless
-# libglib2.0-0 libsm6 libxrender1 libxext6 → some cv2 backends
-# ffmpeg → RTSP / video file support
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 \
     libglib2.0-0 \
@@ -21,17 +16,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Install Python dependencies
-# Replace opencv-python with headless variant (no X11/GUI needed in server mode)
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt && \
-    pip install --no-cache-dir --force-reinstall opencv-python-headless
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy source
 COPY . .
 
-# Create output directories
 RUN mkdir -p outputs/screenshots
+
+RUN useradd -m -r appuser && chown -R appuser:appuser /app
+USER appuser
 
 EXPOSE 8000
 

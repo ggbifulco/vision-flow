@@ -1,3 +1,5 @@
+from unittest.mock import MagicMock, patch
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 
@@ -12,9 +14,30 @@ def valid_headers():
 
 @pytest.fixture
 async def client():
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        yield ac
+    mock_engine = MagicMock()
+    mock_engine.last_analysis = "Test analysis"
+    mock_engine.is_analyzing = False
+    mock_engine.frame_count = 42
+    mock_engine.notifier = MagicMock()
+    mock_engine.notifier.keywords = ["Armed: YES"]
+    mock_engine.notifier.send_message.return_value = True
+    mock_engine.storage = MagicMock()
+    mock_engine.storage.get_stats.return_value = {
+        "total_analyses": 0,
+        "total_alerts": 0,
+        "last_analysis": None,
+    }
+    mock_engine.storage.get_history.return_value = []
+    mock_engine.expert = MagicMock()
+
+    mock_sm = MagicMock()
+    mock_sm.caps = {"Main": MagicMock(isOpened=lambda: True)}
+    mock_sm.get_frame.return_value = (False, None)
+
+    with patch("src.api.deps._engine", mock_engine), patch("src.api.deps._stream_manager", mock_sm):
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            yield ac
 
 
 class TestHealthEndpoint:

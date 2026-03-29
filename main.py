@@ -1,14 +1,43 @@
+import argparse
+import json
 import logging
+import sys
+import os
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    datefmt="%H:%M:%S",
-)
+
+class JSONFormatter(logging.Formatter):
+    def format(self, record: logging.LogRecord) -> str:
+        log_data = {
+            "timestamp": self.formatTime(record, self.datefmt),
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+        }
+        if record.exc_info and record.exc_info[0]:
+            log_data["exception"] = self.formatException(record.exc_info)
+        return json.dumps(log_data, ensure_ascii=False)
+
+
+def setup_logging() -> None:
+    handler = logging.StreamHandler(sys.stdout)
+    if os.getenv("LOG_FORMAT", "").lower() == "json":
+        handler.setFormatter(JSONFormatter(datefmt="%Y-%m-%dT%H:%M:%S"))
+    else:
+        handler.setFormatter(
+            logging.Formatter(
+                "%(asctime)s [%(levelname)s] %(name)s: %(message)s", datefmt="%H:%M:%S"
+            )
+        )
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
+    root.handlers = [handler]
+
+
+setup_logging()
 
 import cv2
-import argparse
 import uvicorn
+
 from src.core.engine import VisionFlowEngine
 from src.config.settings import Settings
 from src.api.app import app
@@ -17,7 +46,7 @@ logger = logging.getLogger(__name__)
 
 
 def run_local_window() -> None:
-    logger.info("VisionFlow: Avvio in modalità Local Window...")
+    logger.info("VisionFlow: Avvio in modalita Local Window...")
     engine = VisionFlowEngine()
     cap = cv2.VideoCapture(0)
 
@@ -48,20 +77,18 @@ def run_local_window() -> None:
 
 
 def run_web_api() -> None:
-    logger.info("VisionFlow: Avvio in modalità Web Server (FastAPI)...")
+    logger.info("VisionFlow: Avvio in modalita Web Server (FastAPI)...")
     logger.info("Endpoint streaming: http://localhost:8000/video_feed")
     uvicorn.run(app, host="0.0.0.0", port=8000)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="VisionFlow: Real-time Multimodal Engine"
-    )
+    parser = argparse.ArgumentParser(description="VisionFlow: Real-time Multimodal Engine")
     parser.add_argument(
         "--mode",
         choices=["local", "web"],
         default="local",
-        help="Modalità: 'local' per finestra OpenCV, 'web' per FastAPI server (default: local)",
+        help="Modalita: 'local' per finestra OpenCV, 'web' per FastAPI server (default: local)",
     )
     args = parser.parse_args()
 

@@ -627,6 +627,8 @@
         </div>
         <div class="topbar-actions">
             <select class="cam-select" id="camSelect" onchange="changeCamera()"></select>
+            <button class="icon-btn" onclick="toggleGridView()" title="Grid View">&#9638;</button>
+            <button class="icon-btn" onclick="toggleHistory()" title="Alert History">&#128203;</button>
             <button class="icon-btn" onclick="toggleSettings()" title="Settings" id="settingsToggle">&#9881;</button>
         </div>
     </div>
@@ -760,6 +762,19 @@
 
                 <div class="section-divider"></div>
 
+                <!-- ALERT HISTORY -->
+                <div class="setting-section">
+                    <div class="section-header">&#128203; Alert History</div>
+                    <div id="historyList" style="max-height:240px;overflow-y:auto">
+                        <div style="color:var(--text-muted);font-size:0.8rem;padding:12px 0">Loading...</div>
+                    </div>
+                    <div style="margin-top:8px">
+                        <button class="btn-sm" onclick="loadHistory()">Refresh</button>
+                    </div>
+                </div>
+
+                <div class="section-divider"></div>
+
                 <!-- TELEGRAM -->
                 <div class="setting-section">
                     <div class="section-header">&#128172; Telegram Alerts</div>
@@ -825,7 +840,7 @@
 
     <script>
         // ── STATE ──
-        let apiKey = localStorage.getItem('vf_api_key') || 'visionflow_secret_123';
+        let apiKey = localStorage.getItem('vf_api_key') || '';
         let currentCam = '';
         let saveEnabled = true;
         let vlmProvider = 'gemini';
@@ -849,9 +864,19 @@
         document.getElementById('apiKeyInput').value = apiKey;
 
         async function init() {
+            // Prompt for API key if not set
+            if (!apiKey) {
+                showSetupWizard();
+                return;
+            }
+            await loadDashboard();
+        }
+
+        async function loadDashboard() {
             // Load cameras
             try {
                 const r = await apiFetch('/cameras');
+                if (!r.ok) { showSetupWizard(); return; }
                 const data = await r.json();
                 const sel = document.getElementById('camSelect');
                 sel.innerHTML = '';
@@ -894,11 +919,64 @@
             renderClassGrid();
             renderKeywords();
             initTelegram();
+            connectWebSocket();
+            loadMetrics();
+        }
+
+        // ── SETUP WIZARD ──
+        function showSetupWizard() {
+            document.getElementById('settingsPanel').classList.add('collapsed');
+            const wrapper = document.querySelector('.feed-wrapper');
+            wrapper.innerHTML = `
+                <div style="max-width:520px;padding:40px;text-align:center">
+                    <div style="width:64px;height:64px;margin:0 auto 20px;background:linear-gradient(135deg,var(--accent),#6366f1);border-radius:16px;display:grid;place-items:center;font-size:28px;font-weight:800">V</div>
+                    <h2 style="font-size:1.5rem;margin-bottom:8px">Welcome to VisionFlow</h2>
+                    <p style="color:var(--text-dim);margin-bottom:28px;font-size:0.9rem">Enter your API key to get started. You can find it in your <code style="color:var(--accent)">.env</code> file.</p>
+                    <div style="display:flex;gap:8px;margin-bottom:16px">
+                        <input class="s-input" id="wizardApiKey" type="password" placeholder="Your API key (e.g. visionflow_secret_123)" style="flex:1;font-size:0.9rem;padding:12px 16px">
+                        <button class="btn btn-accent" onclick="wizardSubmit()" style="padding:12px 24px">Connect</button>
+                    </div>
+                    <div id="wizardError" style="display:none;color:var(--danger);font-size:0.8rem;margin-top:8px"></div>
+                    <p style="color:var(--text-muted);font-size:0.72rem;margin-top:20px">Default key: <code style="color:var(--accent)">visionflow_secret_123</code></p>
+                </div>`;
+        }
+
+        async function wizardSubmit() {
+            const k = document.getElementById('wizardApiKey').value.trim();
+            const err = document.getElementById('wizardError');
+            if (!k) return;
+            apiKey = k;
+            localStorage.setItem('vf_api_key', apiKey);
+            document.getElementById('apiKeyInput').value = apiKey;
+            try {
+                const r = await apiFetch('/health');
+                if (r.ok) {
+                    location.reload();
+                } else {
+                    err.textContent = 'Invalid API key. Please try again.';
+                    err.style.display = 'block';
+                }
+            } catch (e) {
+                err.textContent = 'Cannot connect to server.';
+                err.style.display = 'block';
+            }
         }
 
         function apiFetch(path, opts = {}) {
-            const sep = path.includes('?') ? '&' : '?';
-            return fetch(`${path}${sep}api_key=${apiKey}`, opts);
+            const headers = { ...(opts.headers || {}), 'X-API-Key': apiKey };
+            return fetch(path, { ...opts, headers }).then(resp => {
+                if (resp.status === 403) {
+                    const k = prompt('Invalid API Key. Please re-enter:');
+                    if (k && k.trim()) {
+                        apiKey = k.trim();
+                        localStorage.setItem('vf_api_key', apiKey);
+                        document.getElementById('apiKeyInput').value = apiKey;
+                        headers['X-API-Key'] = apiKey;
+                        return fetch(path, { ...opts, headers });
+                    }
+                }
+                return resp;
+            });
         }
 
         // ── STREAM ──
@@ -912,30 +990,38 @@
             updateStream();
         }
 
-        // ── ANALYSIS POLLING ──
-        async function pollAnalysis() {
-            if (!currentCam) return;
-            try {
-                const r = await apiFetch('/latest_analysis');
-                const data = await r.json();
-                document.getElementById('analysisText').textContent = data.analysis;
+        // ── WEBSOCKET (replaces polling) ──
+        let ws = null;
+        let wsRetry = 0;
 
-                const dot = document.getElementById('statusDot');
-                const txt = document.getElementById('statusText');
-                if (data.is_thinking) {
-                    dot.className = 'pulse-dot thinking';
-                    txt.textContent = 'Analyzing...';
-                } else {
-                    dot.className = 'pulse-dot';
-                    txt.textContent = 'Live';
-                }
+        function connectWebSocket() {
+            const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+            ws = new WebSocket(`${proto}://${location.host}/ws`);
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    document.getElementById('analysisText').textContent = data.analysis;
 
-                document.getElementById('frameChip').style.display = 'flex';
-                document.getElementById('frameCount').textContent = data.frame_count;
-            } catch (e) {}
+                    const dot = document.getElementById('statusDot');
+                    const txt = document.getElementById('statusText');
+                    if (data.is_thinking) {
+                        dot.className = 'pulse-dot thinking';
+                        txt.textContent = 'Analyzing...';
+                    } else {
+                        dot.className = 'pulse-dot';
+                        txt.textContent = 'Live';
+                    }
+
+                    document.getElementById('frameChip').style.display = 'flex';
+                    document.getElementById('frameCount').textContent = data.frame_count;
+                } catch (e) {}
+            };
+            ws.onclose = () => {
+                wsRetry++;
+                setTimeout(connectWebSocket, Math.min(1000 * wsRetry, 10000));
+            };
+            ws.onopen = () => { wsRetry = 0; };
         }
-
-        setInterval(pollAnalysis, 1500);
 
         // ── ASK ──
         async function sendQuery() {
@@ -964,7 +1050,19 @@
 
         // ── SETTINGS PANEL ──
         function toggleSettings() {
-            document.getElementById('settingsPanel').classList.toggle('collapsed');
+            const panel = document.getElementById('settingsPanel');
+            panel.classList.toggle('collapsed');
+            if (!panel.classList.contains('collapsed')) {
+                loadHistory();
+            }
+        }
+
+        function toggleHistory() {
+            const panel = document.getElementById('settingsPanel');
+            if (panel.classList.contains('collapsed')) {
+                panel.classList.remove('collapsed');
+            }
+            loadHistory();
         }
 
         // ── CLASS GRID ──
@@ -1195,6 +1293,102 @@
                  <div style="margin-top:6px;font-size:0.7rem;color:var(--text-muted)">
                    or tap: <a href="${url}" target="_blank" style="color:var(--accent)">@${username}</a>
                  </div>`;
+        }
+
+        // ── METRICS ──
+        async function loadMetrics() {
+            try {
+                const r = await apiFetch('/metrics');
+                const m = await r.json();
+                // Store for display; can be shown in panel if needed
+                window._metrics = m;
+            } catch (e) {}
+        }
+        setInterval(loadMetrics, 30000);
+
+        // ── ALERT HISTORY ──
+        async function loadHistory() {
+            try {
+                const r = await apiFetch('/history?alerts_only=true&limit=20');
+                const d = await r.json();
+                renderHistory(d.records || []);
+            } catch (e) {
+                console.error('Failed to load history:', e);
+            }
+        }
+
+        function renderHistory(records) {
+            const container = document.getElementById('historyList');
+            if (!container) return;
+            if (!records.length) {
+                container.innerHTML = '<div style="color:var(--text-muted);font-size:0.8rem;padding:12px 0">No alerts recorded yet.</div>';
+                return;
+            }
+            container.innerHTML = records.map(r => {
+                const levelColors = {CRITICAL: 'var(--danger)', HIGH: '#f97316', MEDIUM: 'var(--warning)', LOW: 'var(--success)'};
+                const color = levelColors[r.threat_level] || 'var(--text-muted)';
+                const summary = r.result.split('\n').slice(0, 3).join(' | ').substring(0, 120);
+                return `<div style="padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:8px;background:var(--bg)">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                        <span style="font-family:'JetBrains Mono',monospace;font-size:0.7rem;color:var(--text-muted)">${r.timestamp}</span>
+                        ${r.threat_level ? `<span style="font-size:0.65rem;padding:2px 8px;border-radius:4px;background:${color}22;color:${color};font-weight:600">${r.threat_level}</span>` : ''}
+                    </div>
+                    <div style="font-size:0.78rem;color:var(--text-dim);line-height:1.4">${summary}</div>
+                </div>`;
+            }).join('');
+        }
+
+        // ── GRID VIEW ──
+        let gridMode = false;
+
+        function toggleGridView() {
+            gridMode = !gridMode;
+            const wrapper = document.querySelector('.feed-wrapper');
+            if (gridMode) {
+                wrapper.style.display = 'grid';
+                wrapper.style.gridTemplateColumns = 'repeat(auto-fit, minmax(300px, 1fr))';
+                wrapper.style.gap = '4px';
+                wrapper.style.padding = '4px';
+                renderGridCams();
+            } else {
+                wrapper.style.display = 'flex';
+                wrapper.style.gridTemplateColumns = '';
+                wrapper.style.gap = '';
+                wrapper.style.padding = '';
+                wrapper.innerHTML = `<img id="videoFeed" src="" alt="Live Feed">
+                    <div class="feed-overlay">
+                        <div class="feed-chip"><div class="pulse-dot" id="statusDot"></div><span id="statusText">Connecting...</span></div>
+                        <div class="feed-chip" id="frameChip" style="display:none"><span id="frameCount">0</span> frames</div>
+                    </div>`;
+                updateStream();
+                connectWebSocket();
+            }
+        }
+
+        async function renderGridCams() {
+            const wrapper = document.querySelector('.feed-wrapper');
+            wrapper.innerHTML = '';
+            try {
+                const r = await apiFetch('/cameras');
+                const data = await r.json();
+                data.cameras.forEach(cam => {
+                    const div = document.createElement('div');
+                    div.style.position = 'relative';
+                    div.style.background = '#000';
+                    div.style.borderRadius = '8px';
+                    div.style.overflow = 'hidden';
+                    div.style.aspectRatio = '4/3';
+                    div.innerHTML = `
+                        <img src="/video_feed/${cam}?api_key=${apiKey}" style="width:100%;height:100%;object-fit:cover" alt="${cam}">
+                        <div style="position:absolute;bottom:8px;left:8px;font-family:'JetBrains Mono',monospace;font-size:0.7rem;padding:3px 8px;background:rgba(0,0,0,.7);border-radius:4px;color:var(--accent)">${cam}</div>`;
+                    div.style.cursor = 'pointer';
+                    div.onclick = () => {
+                        currentCam = cam;
+                        toggleGridView();
+                    };
+                    wrapper.appendChild(div);
+                });
+            } catch (e) {}
         }
 
         // ── START ──

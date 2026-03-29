@@ -1,24 +1,30 @@
 import hmac
 import logging
 import threading
+
 from fastapi import Security, HTTPException
 from fastapi.security.api_key import APIKeyHeader, APIKeyQuery
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+
 from src.core.engine import VisionFlowEngine
 from src.stream.manager import StreamManager
 from src.config.settings import Settings
 
 logger = logging.getLogger(__name__)
 
-# --- Security ---
 API_KEY_NAME = "X-API-Key"
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 api_key_query = APIKeyQuery(name="api_key", auto_error=False)
+
+# --- Rate Limiter (shared) ---
+limiter = Limiter(key_func=get_remote_address)
 
 
 async def get_api_key(
     header: str = Security(api_key_header),
     query: str = Security(api_key_query),
-):
+) -> str:
     key = header or query
     if key and hmac.compare_digest(key, Settings.API_KEY):
         return key

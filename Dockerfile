@@ -1,3 +1,8 @@
+FROM python:3.11-slim AS builder
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+
 FROM python:3.11-slim
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -14,16 +19,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
+COPY --from=builder /install /usr/local
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+WORKDIR /app
 
 COPY . .
 
-RUN mkdir -p outputs/screenshots
+RUN mkdir -p outputs/screenshots && \
+    useradd -m -r appuser && \
+    chown -R appuser:appuser /app
 
-RUN useradd -m -r appuser && chown -R appuser:appuser /app
 USER appuser
 
 EXPOSE 8000

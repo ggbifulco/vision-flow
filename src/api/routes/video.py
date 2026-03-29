@@ -1,9 +1,11 @@
 import time
 from typing import Generator
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import StreamingResponse
+
 import cv2
-from src.api.deps import get_api_key, get_engine, get_stream_manager
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import StreamingResponse
+
+from src.api.deps import limiter, get_api_key, get_engine, get_stream_manager
 from src.config.settings import Settings
 
 router = APIRouter(prefix="/video_feed", tags=["Video"])
@@ -31,14 +33,13 @@ def generate_frames(cam_id: str) -> Generator[bytes, None, None]:
         ret, buffer = cv2.imencode(".jpg", processed_frame, RESIZE_PARAMS)
         if not ret:
             continue
-        yield (
-            b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + buffer.tobytes() + b"\r\n"
-        )
+        yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + buffer.tobytes() + b"\r\n")
 
 
 @router.get("/{cam_id}")
+@limiter.limit("60/minute")
 async def video_feed(
-    cam_id: str, api_key: str = Depends(get_api_key)
+    request: Request, cam_id: str, api_key: str = Depends(get_api_key)
 ) -> StreamingResponse:
     if cam_id not in Settings.SOURCES:
         raise HTTPException(status_code=404, detail="Camera not found")

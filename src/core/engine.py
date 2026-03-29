@@ -1,14 +1,18 @@
 import cv2
-import time
 import logging
+import tempfile
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from collections import defaultdict
+from pathlib import Path
 from typing import Optional
+
 import numpy as np
 from PIL import Image
+
 from src.inference.yolo_detector import YOLODetector
-from src.vlm.visual_expert import VisualExpert
+from src.vlm.visual_expert import VisualExpert, get_vlm_circuit
 from src.core.storage import StorageManager
 from src.core.notifier import NotificationManager
 from src.config.settings import Settings
@@ -16,6 +20,7 @@ from src.config.settings import Settings
 logger = logging.getLogger(__name__)
 
 MAX_VLM_WORKERS = 4
+_ALERT_RETRY_INTERVAL = 120
 
 
 class VisionFlowEngine:
@@ -28,12 +33,9 @@ class VisionFlowEngine:
         self._frame_count: int = 0
         self._is_analyzing: bool = False
         self._last_vlm_time: float = 0.0
+        self._last_alert_retry: float = 0.0
         self._lock = threading.Lock()
-        self._executor = ThreadPoolExecutor(
-            max_workers=MAX_VLM_WORKERS, thread_name_prefix="vlm"
-        )
-
-    # --- Thread-safe properties ---
+        self._executor = ThreadPoolExecutor(max_workers=MAX_VLM_WORKERS, thread_name_prefix="vlm")
 
     @property
     def last_analysis(self) -> str:
@@ -68,6 +70,17 @@ class VisionFlowEngine:
     def shutdown(self) -> None:
         self._executor.shutdown(wait=False, cancel_futures=True)
 
+    @staticmethod
+    def _save_alert_frame(frame: np.ndarray) -> Optional[str]:
+        try:
+            ts = time.strftime("%Y%m%d_%H%M%S")
+            path = Path(tempfile.gettempdir()) / f"vf_alert_{ts}.jpg"
+            cv2.imwrite(str(path), frame)
+            return str(path)
+        except Exception as e:
+            logger.error(f"Failed to save alert screenshot: {e}")
+            return None
+
     def _run_vlm_analysis(
         self,
         frame_original: np.ndarray,
@@ -80,38 +93,59 @@ class VisionFlowEngine:
             logger.info(f"VLM analysis started (mission: {query[:40]}...)")
             result = self.expert.predict(frame_pil, query)
             self.last_analysis = result
+            Settings.increment_metric("vlm_calls")
 
-            screenshot_path: Optional[str] = None
+            # Persist if enabled
             if Settings.SAVE_ANALYSIS:
-                screenshot_path = self.storage.save_record(
-                    frame_original, self.frame_count, result
-                )
+                self.storage.save_record(frame_original, self.frame_count, result)
 
             logger.debug(f"VLM result: {result[:120]}")
-            logger.debug(f"Keywords: {self.notifier.keywords}")
-            logger.debug(f"Subscribers: {Settings.TELEGRAM_CHAT_IDS}")
 
             if self.notifier.should_alert(result):
+                Settings.increment_metric("alerts_triggered")
                 logger.warning(
                     f"ALERT triggered, sending to {target_chat_ids or Settings.TELEGRAM_CHAT_IDS}..."
                 )
-                self.notifier.send_telegram_alert(
-                    result, screenshot_path, chat_ids=target_chat_ids
-                )
+                alert_photo = self._save_alert_frame(frame_original)
+                self.notifier.send_telegram_alert(result, alert_photo, chat_ids=target_chat_ids)
+                # Save alert to DB with screenshot
+                if alert_photo:
+                    self.storage.save_alert(frame_original, self.frame_count, result, alert_photo)
+                    Path(alert_photo).unlink(missing_ok=True)
+                else:
+                    self.storage.save_alert(frame_original, self.frame_count, result, "")
             else:
                 logger.debug("No alert keywords matched — notification skipped.")
 
             logger.info("VLM analysis complete.")
+        except RuntimeError as e:
+            Settings.increment_metric("vlm_errors")
+            if "circuit breaker" in str(e).lower():
+                logger.warning(f"VLM skipped: {e}")
+                self.last_analysis = f"VLM temporarily unavailable: {e}"
+            else:
+                logger.error(f"VLM analysis error: {e}", exc_info=True)
+                self.last_analysis = f"VLM error: {e}"
         except Exception as e:
+            Settings.increment_metric("vlm_errors")
             logger.error(f"VLM analysis error: {e}", exc_info=True)
             self.last_analysis = f"VLM error: {e}"
         finally:
             self.is_analyzing = False
 
+    def _maybe_retry_alerts(self) -> None:
+        now = time.time()
+        if now - self._last_alert_retry > _ALERT_RETRY_INTERVAL:
+            self._last_alert_retry = now
+            self.notifier.retry_failed()
+
     def process_frame(
         self, frame: np.ndarray, user_query: Optional[str] = None
     ) -> tuple[np.ndarray, str]:
         self.frame_count += 1
+        Settings.increment_metric("frames_processed")
+
+        self._maybe_retry_alerts()
 
         results = self.detector.predict(frame)
 
@@ -119,9 +153,7 @@ class VisionFlowEngine:
         if hasattr(results, "boxes") and results.boxes is not None:
             detected_classes = results.boxes.cls.cpu().numpy().tolist()
 
-        has_interest = any(
-            cls_id in Settings.TRIGGER_CLASSES for cls_id in detected_classes
-        )
+        has_interest = any(cls_id in Settings.TRIGGER_CLASSES for cls_id in detected_classes)
         with self._lock:
             elapsed = time.time() - self._last_vlm_time
 
@@ -137,15 +169,11 @@ class VisionFlowEngine:
             frame_pil = Image.fromarray(frame_rgb)
 
             if user_query:
-                self._executor.submit(
-                    self._run_vlm_analysis, frame_original, frame_pil, user_query
-                )
+                self._executor.submit(self._run_vlm_analysis, frame_original, frame_pil, user_query)
             else:
                 mission_to_users: dict[str, list[str]] = defaultdict(list)
                 for chat_id in Settings.TELEGRAM_CHAT_IDS:
-                    mission = Settings.USER_MISSIONS.get(
-                        chat_id, Settings.DEFAULT_MISSION
-                    )
+                    mission = Settings.USER_MISSIONS.get(chat_id, Settings.DEFAULT_MISSION)
                     mission_to_users[mission].append(chat_id)
 
                 if not mission_to_users:

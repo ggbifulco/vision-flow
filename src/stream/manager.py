@@ -1,8 +1,11 @@
-import cv2
 import logging
+import threading
 import time
 from typing import Optional
+
+import cv2
 import numpy as np
+
 from src.config.settings import Settings
 
 logger = logging.getLogger(__name__)
@@ -16,6 +19,7 @@ class StreamManager:
         self.caps: dict[str, cv2.VideoCapture] = {}
         self._reconnect_attempts: dict[str, int] = {}
         self._reconnect_delay: dict[str, float] = {}
+        self._reconnecting: dict[str, bool] = {}
         self.connect_all()
 
     def connect_all(self) -> None:
@@ -32,37 +36,44 @@ class StreamManager:
     def get_frame(self, name: str) -> tuple[bool, Optional[np.ndarray]]:
         cap = self.caps.get(name)
         if cap is None or not cap.isOpened():
-            self._reconnect(name)
+            self._schedule_reconnect(name)
             return False, None
 
         ret, frame = cap.read()
         if not ret:
             logger.warning(f"Errore lettura '{name}'. Riprovo...")
             cap.release()
-            self._reconnect(name)
+            self._schedule_reconnect(name)
             return False, None
 
-        # Reset reconnect state on successful read
         self._reconnect_attempts[name] = 0
         self._reconnect_delay[name] = 0.0
 
         return True, frame
 
-    def _reconnect(self, name: str) -> None:
+    def _schedule_reconnect(self, name: str) -> None:
         if name not in self.sources:
             logger.warning(f"Camera '{name}' not found in sources")
             return
 
-        attempts = self._reconnect_attempts.get(name, 0) + 1
-        self._reconnect_attempts[name] = attempts
+        if self._reconnecting.get(name):
+            return
 
-        delay = min(2 ** (attempts - 1), MAX_RECONNECT_DELAY)
-        self._reconnect_delay[name] = delay
+        self._reconnecting[name] = True
 
-        logger.debug(f"Reconnect '{name}' attempt #{attempts}, waiting {delay:.1f}s")
-        time.sleep(delay)
+        def _do_reconnect() -> None:
+            try:
+                attempts = self._reconnect_attempts.get(name, 0) + 1
+                self._reconnect_attempts[name] = attempts
+                delay = min(2 ** (attempts - 1), MAX_RECONNECT_DELAY)
+                self._reconnect_delay[name] = delay
+                logger.debug(f"Reconnect '{name}' attempt #{attempts}, waiting {delay:.1f}s")
+                time.sleep(delay)
+                self.connect(name, self.sources[name])
+            finally:
+                self._reconnecting[name] = False
 
-        self.connect(name, self.sources[name])
+        threading.Thread(target=_do_reconnect, daemon=True).start()
 
     def release_all(self) -> None:
         for name, cap in self.caps.items():

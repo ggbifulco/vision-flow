@@ -10,20 +10,22 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
     volumes:
-      # Persist analysis outputs and screenshots
       - ./outputs:/app/outputs
-      # Persist YOLO model cache (avoids re-downloading on restart)
       - yolo_cache:/home/appuser/.config/Ultralytics
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "2.0"
+        reservations:
+          memory: 512M
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
 
-    # ── WEBCAM (Linux only) ──────────────────────────────────────────────────
-    # Uncomment if you want to use a local USB webcam inside Docker.
-    # On Windows/Mac use an IP camera (RTSP) instead — add it to Settings.SOURCES.
-    #
+    # WEBCAM (Linux only) — uncomment to pass USB webcam into Docker
     # devices:
     #   - "/dev/video0:/dev/video0"
     # group_add:

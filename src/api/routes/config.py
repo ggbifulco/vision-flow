@@ -2,12 +2,14 @@ import logging
 import os
 from pathlib import Path
 from typing import Optional
-from fastapi import APIRouter, Depends
+
+import requests
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-import requests
 from dotenv import set_key
-from src.api.deps import get_api_key, get_engine
+
+from src.api.deps import limiter, get_api_key, get_engine
 from src.config.settings import Settings
 
 logger = logging.getLogger(__name__)
@@ -39,35 +41,42 @@ async def get_mission(api_key: str = Depends(get_api_key)):
 
 
 @router.post("/mission")
-async def update_mission(request: MissionRequest, api_key: str = Depends(get_api_key)):
-    Settings.DEFAULT_MISSION = request.mission
-    logger.info(f"New AI mission: {request.mission}")
-    return {"status": "success", "new_mission": request.mission}
+@limiter.limit("30/minute")
+async def update_mission(
+    request: Request, body: MissionRequest, api_key: str = Depends(get_api_key)
+):
+    Settings.DEFAULT_MISSION = body.mission
+    Settings.save_state()
+    logger.info(f"New AI mission: {body.mission}")
+    return {"status": "success", "new_mission": body.mission}
 
 
 @router.post("/settings")
-async def update_settings(request: SettingsUpdate, api_key: str = Depends(get_api_key)):
-    if request.confidence_threshold is not None:
-        Settings.CONFIDENCE_THRESHOLD = request.confidence_threshold
-    if request.vlm_interval is not None:
-        Settings.VLM_INTERVAL = request.vlm_interval
-    if request.trigger_classes is not None:
-        Settings.TRIGGER_CLASSES = request.trigger_classes
-    if request.alert_keywords is not None:
-        Settings.ALERT_KEYWORDS = request.alert_keywords
+@limiter.limit("30/minute")
+async def update_settings(
+    request: Request, body: SettingsUpdate, api_key: str = Depends(get_api_key)
+):
+    if body.confidence_threshold is not None:
+        Settings.CONFIDENCE_THRESHOLD = body.confidence_threshold
+    if body.vlm_interval is not None:
+        Settings.VLM_INTERVAL = body.vlm_interval
+    if body.trigger_classes is not None:
+        Settings.TRIGGER_CLASSES = body.trigger_classes
+    if body.alert_keywords is not None:
+        Settings.ALERT_KEYWORDS = body.alert_keywords
         vfe = get_engine()
-        if vfe:
-            vfe.notifier.keywords = request.alert_keywords
-    if request.display_width is not None:
-        Settings.DISPLAY_WIDTH = request.display_width
-    if request.display_height is not None:
-        Settings.DISPLAY_HEIGHT = request.display_height
-    if request.save_analysis is not None:
-        Settings.SAVE_ANALYSIS = request.save_analysis
-    if request.vlm_provider is not None and request.vlm_provider in ("groq", "gemini"):
+        vfe.notifier.keywords = body.alert_keywords
+    if body.display_width is not None:
+        Settings.DISPLAY_WIDTH = body.display_width
+    if body.display_height is not None:
+        Settings.DISPLAY_HEIGHT = body.display_height
+    if body.save_analysis is not None:
+        Settings.SAVE_ANALYSIS = body.save_analysis
+    if body.vlm_provider is not None and body.vlm_provider in ("groq", "gemini"):
         vfe = get_engine()
-        if vfe:
-            vfe.expert.switch_provider(request.vlm_provider)
+        vfe.expert.switch_provider(body.vlm_provider)
+
+    Settings.save_state()
     logger.info("Settings updated from dashboard")
     return {"status": "success"}
 
@@ -95,13 +104,12 @@ async def telegram_status(api_key: str = Depends(get_api_key)):
 
 
 @router.post("/telegram_test")
-async def telegram_test(api_key: str = Depends(get_api_key)):
+@limiter.limit("5/minute")
+async def telegram_test(request: Request, api_key: str = Depends(get_api_key)):
     token = Settings.TELEGRAM_TOKEN
     chat_ids = list(Settings.TELEGRAM_CHAT_IDS)
     if not token:
-        return JSONResponse(
-            content={"error": "No bot token configured."}, status_code=400
-        )
+        return JSONResponse(content={"error": "No bot token configured."}, status_code=400)
     if not chat_ids:
         return JSONResponse(
             content={
@@ -112,9 +120,7 @@ async def telegram_test(api_key: str = Depends(get_api_key)):
     vfe = get_engine()
     sent = 0
     for cid in chat_ids:
-        if vfe.notifier.send_message(
-            cid, "🧪 VisionFlow test alert — connection is working!"
-        ):
+        if vfe.notifier.send_message(cid, "🧪 VisionFlow test alert — connection is working!"):
             sent += 1
     return {"sent": sent, "total": len(chat_ids)}
 
@@ -140,10 +146,13 @@ async def list_cameras(api_key: str = Depends(get_api_key)):
 
 
 @router.post("/register_token")
+@limiter.limit("5/minute")
 async def register_token(
-    request: TelegramSetupRequest, api_key: str = Depends(get_api_key)
+    request: Request,
+    body: TelegramSetupRequest,
+    api_key: str = Depends(get_api_key),
 ):
-    url = f"https://api.telegram.org/bot{request.token}/getMe"
+    url = f"https://api.telegram.org/bot{body.token}/getMe"
     try:
         response = requests.get(url, timeout=5)
         data = response.json()
@@ -154,23 +163,19 @@ async def register_token(
                 },
                 status_code=400,
             )
-        # Persist token to .env so it survives restarts
         env_path = Path(__file__).resolve().parent.parent.parent.parent / ".env"
         env_path.touch(exist_ok=True)
-        set_key(str(env_path), "TELEGRAM_TOKEN", request.token, quote_mode="never")
-        Settings.TELEGRAM_TOKEN = request.token
-        os.environ["TELEGRAM_TOKEN"] = request.token
+        set_key(str(env_path), "TELEGRAM_TOKEN", body.token, quote_mode="never")
+        Settings.TELEGRAM_TOKEN = body.token
+        os.environ["TELEGRAM_TOKEN"] = body.token
 
         vfe = get_engine()
-        vfe.notifier.token = request.token
+        vfe.notifier.token = body.token
         logger.info(f"Telegram bot configured: @{data['result']['username']}")
 
-        # Auto-register anyone who already interacted with this bot
-        token = request.token
+        token = body.token
         try:
-            upd = requests.get(
-                f"https://api.telegram.org/bot{token}/getUpdates", timeout=5
-            ).json()
+            upd = requests.get(f"https://api.telegram.org/bot{token}/getUpdates", timeout=5).json()
             for update in upd.get("result", []):
                 chat_id = str(update.get("message", {}).get("chat", {}).get("id", ""))
                 if chat_id and chat_id not in Settings.TELEGRAM_CHAT_IDS:
@@ -203,10 +208,10 @@ async def poll_chat_id(api_key: str = Depends(get_api_key)):
         if data.get("ok") and len(data["result"]) > 0:
             chat_id = str(data["result"][-1]["message"]["chat"]["id"])
             Settings.save_telegram_config(token, chat_id)
-            if vfe := get_engine():
-                vfe.notifier.token = token
-                Settings.TELEGRAM_CHAT_IDS.add(chat_id)
-                Settings.persist_chat_ids()
+            vfe = get_engine()
+            vfe.notifier.token = token
+            Settings.TELEGRAM_CHAT_IDS.add(chat_id)
+            Settings.persist_chat_ids()
             return {"status": "success", "chat_id": chat_id}
         return {"status": "waiting"}
     except (requests.RequestException, KeyError, ValueError) as e:

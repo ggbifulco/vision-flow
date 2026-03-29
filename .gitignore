@@ -10,6 +10,7 @@ assets/*
 !assets/.gitkeep
 outputs/*
 !outputs/.gitkeep
+*.db
 
 # OS
 .DS_Store

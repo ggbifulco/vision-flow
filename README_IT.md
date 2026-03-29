@@ -18,6 +18,8 @@
 
 > **YOLO26 rileva. Gemini capisce. Telegram avvisa. Tu sei sempre informato.**
 
+https://github.com/user-attachments/assets/915285d2-06ec-45e6-b1bb-a0121b79a8b3
+
 <br/>
 
 </div>

@@ -1,21 +1,20 @@
-import cv2
 import logging
 import tempfile
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Optional
 
+import cv2
 import numpy as np
 from PIL import Image
 
-from src.inference.yolo_detector import YOLODetector
-from src.vlm.visual_expert import VisualExpert, get_vlm_circuit
-from src.core.storage import StorageManager
-from src.core.notifier import NotificationManager
 from src.config.settings import Settings
+from src.core.notifier import NotificationManager
+from src.core.storage import StorageManager
+from src.inference.yolo_detector import YOLODetector
+from src.vlm.visual_expert import VisualExpert
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +70,7 @@ class VisionFlowEngine:
         self._executor.shutdown(wait=False, cancel_futures=True)
 
     @staticmethod
-    def _save_alert_frame(frame: np.ndarray) -> Optional[str]:
+    def _save_alert_frame(frame: np.ndarray) -> str | None:
         try:
             ts = time.strftime("%Y%m%d_%H%M%S")
             path = Path(tempfile.gettempdir()) / f"vf_alert_{ts}.jpg"
@@ -86,7 +85,7 @@ class VisionFlowEngine:
         frame_original: np.ndarray,
         frame_pil: Image.Image,
         query: str,
-        target_chat_ids: Optional[list[str]] = None,
+        target_chat_ids: list[str] | None = None,
     ) -> None:
         self.is_analyzing = True
         try:
@@ -95,7 +94,6 @@ class VisionFlowEngine:
             self.last_analysis = result
             Settings.increment_metric("vlm_calls")
 
-            # Persist if enabled
             if Settings.SAVE_ANALYSIS:
                 self.storage.save_record(frame_original, self.frame_count, result)
 
@@ -108,7 +106,6 @@ class VisionFlowEngine:
                 )
                 alert_photo = self._save_alert_frame(frame_original)
                 self.notifier.send_telegram_alert(result, alert_photo, chat_ids=target_chat_ids)
-                # Save alert to DB with screenshot
                 if alert_photo:
                     self.storage.save_alert(frame_original, self.frame_count, result, alert_photo)
                     Path(alert_photo).unlink(missing_ok=True)
@@ -140,7 +137,7 @@ class VisionFlowEngine:
             self.notifier.retry_failed()
 
     def process_frame(
-        self, frame: np.ndarray, user_query: Optional[str] = None
+        self, frame: np.ndarray, user_query: str | None = None
     ) -> tuple[np.ndarray, str]:
         self.frame_count += 1
         Settings.increment_metric("frames_processed")

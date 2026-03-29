@@ -1,8 +1,9 @@
 import logging
-from typing import Any
+
 from ultralytics import YOLO
-from src.core.base_model import BaseModel
+
 from src.config.settings import Settings
+from src.core.base_model import BaseModel
 
 logger = logging.getLogger(__name__)
 
@@ -12,7 +13,7 @@ class YOLODetector(BaseModel):
         logger.info(f"Loading YOLO ({Settings.YOLO_MODEL_PATH})...")
         self.model = YOLO(Settings.YOLO_MODEL_PATH)
 
-    def predict(self, frame: Any) -> Any:
+    def predict(self, frame):
         results = self.model.track(
             frame,
             persist=True,

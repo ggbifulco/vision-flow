@@ -15,13 +15,13 @@ class TestStreamManagerEdgeCases:
         sm.release_all()
 
     def test_reconnect_schedules_only_once(self):
+        import time
+
         sm = StreamManager(sources={})
         sm.sources["test"] = 999
         sm._schedule_reconnect("test")
         assert sm._reconnecting.get("test") is True
         sm._schedule_reconnect("test")
         assert sm._reconnecting.get("test") is True
-        import time
-
         time.sleep(1)
         sm.release_all()

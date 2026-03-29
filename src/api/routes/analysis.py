@@ -1,11 +1,11 @@
-import re
 import logging
+import re
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from src.api.deps import limiter, get_api_key, get_engine, get_stream_manager
+from src.api.deps import get_api_key, get_engine, get_stream_manager, limiter
 from src.config.settings import Settings
 
 logger = logging.getLogger(__name__)
@@ -43,7 +43,7 @@ async def get_latest_analysis(api_key: str = Depends(get_api_key)) -> dict:
 @limiter.limit("10/minute")
 async def ask_vlm(request: Request, body: QueryRequest, api_key: str = Depends(get_api_key)):
     if _is_prompt_injection(body.prompt):
-        logger.warning(f"Prompt injection attempt blocked from request")
+        logger.warning("Prompt injection attempt blocked from request")
         return JSONResponse(
             content={"error": "Prompt contains disallowed patterns"}, status_code=400
         )

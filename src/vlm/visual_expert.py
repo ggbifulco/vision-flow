@@ -1,11 +1,10 @@
 import base64
 import io
 import logging
-from typing import Optional
 
+from src.config.settings import Settings
 from src.core.base_model import BaseModel
 from src.core.circuit_breaker import CircuitBreaker
-from src.config.settings import Settings
 
 logger = logging.getLogger(__name__)
 

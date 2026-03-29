@@ -1,15 +1,14 @@
 import logging
 import os
 from pathlib import Path
-from typing import Optional
 
 import requests
+from dotenv import set_key
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-from dotenv import set_key
 
-from src.api.deps import limiter, get_api_key, get_engine
+from src.api.deps import get_api_key, get_engine, limiter
 from src.config.settings import Settings
 
 logger = logging.getLogger(__name__)
@@ -25,14 +24,14 @@ class MissionRequest(BaseModel):
 
 
 class SettingsUpdate(BaseModel):
-    confidence_threshold: Optional[float] = Field(None, ge=0.0, le=1.0)
-    vlm_interval: Optional[int] = Field(None, ge=1, le=3600)
-    trigger_classes: Optional[list[int]] = None
-    alert_keywords: Optional[list[str]] = None
-    display_width: Optional[int] = Field(None, ge=160, le=3840)
-    display_height: Optional[int] = Field(None, ge=120, le=2160)
-    save_analysis: Optional[bool] = None
-    vlm_provider: Optional[str] = None
+    confidence_threshold: float | None = Field(None, ge=0.0, le=1.0)
+    vlm_interval: int | None = Field(None, ge=1, le=3600)
+    trigger_classes: list[int] | None = None
+    alert_keywords: list[str] | None = None
+    display_width: int | None = Field(None, ge=160, le=3840)
+    display_height: int | None = Field(None, ge=120, le=2160)
+    save_analysis: bool | None = None
+    vlm_provider: str | None = None
 
 
 @router.get("/mission")

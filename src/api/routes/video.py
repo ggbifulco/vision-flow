@@ -1,11 +1,10 @@
 import time
-from typing import Generator
 
 import cv2
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
-from src.api.deps import limiter, get_api_key, get_engine, get_stream_manager
+from src.api.deps import get_api_key, limiter
 from src.config.settings import Settings
 
 router = APIRouter(prefix="/video_feed", tags=["Video"])
@@ -14,7 +13,9 @@ JPEG_QUALITY = 75
 RESIZE_PARAMS = [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY]
 
 
-def generate_frames(cam_id: str) -> Generator[bytes, None, None]:
+def generate_frames(cam_id: str):
+    from src.api.deps import get_engine, get_stream_manager
+
     vfe = get_engine()
     sm = get_stream_manager()
     target_w = Settings.DISPLAY_WIDTH

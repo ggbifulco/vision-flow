@@ -1,9 +1,7 @@
 import pytest
-from httpx import AsyncClient, ASGITransport
-from unittest.mock import patch, MagicMock
+from httpx import ASGITransport, AsyncClient
 
 from src.api.app import app
-from src.api.deps import get_api_key, get_engine, get_stream_manager
 from src.config.settings import Settings
 
 
@@ -13,34 +11,7 @@ def valid_headers():
 
 
 @pytest.fixture
-def mock_stream_manager():
-    sm = MagicMock()
-    frame_mock = MagicMock()
-    import numpy as np
-
-    frame_mock = np.zeros((480, 640, 3), dtype=np.uint8)
-    sm.get_frame.return_value = (True, frame_mock)
-    sm.caps = {"Main": MagicMock(isOpened=lambda: True)}
-    return sm
-
-
-@pytest.fixture
-def mock_engine():
-    engine = MagicMock()
-    engine.last_analysis = "Test analysis result"
-    engine.is_analyzing = False
-    engine.frame_count = 42
-    engine.process_frame.return_value = (None, "Test analysis result")
-    engine.notifier = MagicMock()
-    engine.notifier.send_message.return_value = True
-    engine.notifier.keywords = ["Armed: YES"]
-    engine.notifier.should_alert.return_value = False
-    engine.expert = MagicMock()
-    return engine
-
-
-@pytest.fixture
-async def client(mock_engine, mock_stream_manager):
+async def client():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac

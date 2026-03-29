@@ -2,14 +2,14 @@ import hmac
 import logging
 import threading
 
-from fastapi import Security, HTTPException
+from fastapi import HTTPException, Security
 from fastapi.security.api_key import APIKeyHeader, APIKeyQuery
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
+from src.config.settings import Settings
 from src.core.engine import VisionFlowEngine
 from src.stream.manager import StreamManager
-from src.config.settings import Settings
 
 logger = logging.getLogger(__name__)
 

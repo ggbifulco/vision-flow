@@ -1,12 +1,19 @@
 import argparse
-import json
 import logging
 import sys
-import os
+
+import cv2
+import uvicorn
+
+from src.api.app import app
+from src.config.settings import Settings
+from src.core.engine import VisionFlowEngine
 
 
 class JSONFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
+        import json
+
         log_data = {
             "timestamp": self.formatTime(record, self.datefmt),
             "level": record.levelname,
@@ -19,6 +26,8 @@ class JSONFormatter(logging.Formatter):
 
 
 def setup_logging() -> None:
+    import os
+
     handler = logging.StreamHandler(sys.stdout)
     if os.getenv("LOG_FORMAT", "").lower() == "json":
         handler.setFormatter(JSONFormatter(datefmt="%Y-%m-%dT%H:%M:%S"))
@@ -34,13 +43,6 @@ def setup_logging() -> None:
 
 
 setup_logging()
-
-import cv2
-import uvicorn
-
-from src.core.engine import VisionFlowEngine
-from src.config.settings import Settings
-from src.api.app import app
 
 logger = logging.getLogger(__name__)
 

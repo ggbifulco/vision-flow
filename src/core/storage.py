@@ -1,10 +1,8 @@
-import json
 import logging
 import sqlite3
 import threading
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 import cv2
 import numpy as np
@@ -30,7 +28,7 @@ CREATE INDEX IF NOT EXISTS idx_analyses_alert ON analyses(is_alert);
 
 
 class StorageManager:
-    def __init__(self, db_path: Optional[str] = None) -> None:
+    def __init__(self, db_path: str | None = None) -> None:
         self.db_path = Path(db_path or Settings.DB_PATH)
         self.screenshots_dir = Path(Settings.SCREENSHOTS_DIR)
         self._ensure_dirs()
@@ -48,13 +46,13 @@ class StorageManager:
         with self._get_conn() as conn:
             conn.executescript(_SCHEMA)
 
-    def _extract_threat_level(self, text: str) -> Optional[str]:
+    def _extract_threat_level(self, text: str) -> str | None:
         for level in ("CRITICAL", "HIGH", "MEDIUM", "LOW"):
             if level in text.upper():
                 return level
         return None
 
-    def save_record(self, frame: np.ndarray, frame_id: int, analysis_text: str) -> Optional[str]:
+    def save_record(self, frame: np.ndarray, frame_id: int, analysis_text: str) -> str | None:
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         file_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         threat_level = self._extract_threat_level(analysis_text)
@@ -63,12 +61,11 @@ class StorageManager:
         screenshot_path = self.screenshots_dir / screenshot_filename
         cv2.imwrite(str(screenshot_path), frame)
 
-        with self._lock:
-            with self._get_conn() as conn:
-                conn.execute(
-                    "INSERT INTO analyses (timestamp, frame_id, result, threat_level, screenshot_path) VALUES (?, ?, ?, ?, ?)",
-                    (timestamp, frame_id, analysis_text, threat_level, str(screenshot_path)),
-                )
+        with self._lock, self._get_conn() as conn:
+            conn.execute(
+                "INSERT INTO analyses (timestamp, frame_id, result, threat_level, screenshot_path) VALUES (?, ?, ?, ?, ?)",
+                (timestamp, frame_id, analysis_text, threat_level, str(screenshot_path)),
+            )
 
         logger.debug(f"Saved analysis record: {screenshot_filename}")
         return str(screenshot_path)
@@ -79,12 +76,11 @@ class StorageManager:
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         threat_level = self._extract_threat_level(analysis_text)
 
-        with self._lock:
-            with self._get_conn() as conn:
-                conn.execute(
-                    "INSERT INTO analyses (timestamp, frame_id, result, threat_level, is_alert, screenshot_path) VALUES (?, ?, ?, ?, 1, ?)",
-                    (timestamp, frame_id, analysis_text, threat_level, screenshot_path),
-                )
+        with self._lock, self._get_conn() as conn:
+            conn.execute(
+                "INSERT INTO analyses (timestamp, frame_id, result, threat_level, is_alert, screenshot_path) VALUES (?, ?, ?, ?, 1, ?)",
+                (timestamp, frame_id, analysis_text, threat_level, screenshot_path),
+            )
 
     def get_history(self, limit: int = 50, alerts_only: bool = False) -> list[dict]:
         query = "SELECT id, timestamp, frame_id, result, threat_level, is_alert, screenshot_path FROM analyses"
@@ -92,9 +88,8 @@ class StorageManager:
             query += " WHERE is_alert = 1"
         query += " ORDER BY id DESC LIMIT ?"
 
-        with self._lock:
-            with self._get_conn() as conn:
-                rows = conn.execute(query, (limit,)).fetchall()
+        with self._lock, self._get_conn() as conn:
+            rows = conn.execute(query, (limit,)).fetchall()
 
         return [
             {
@@ -110,15 +105,12 @@ class StorageManager:
         ]
 
     def get_stats(self) -> dict:
-        with self._lock:
-            with self._get_conn() as conn:
-                total = conn.execute("SELECT COUNT(*) FROM analyses").fetchone()[0]
-                alerts = conn.execute(
-                    "SELECT COUNT(*) FROM analyses WHERE is_alert = 1"
-                ).fetchone()[0]
-                last_ts = conn.execute(
-                    "SELECT timestamp FROM analyses ORDER BY id DESC LIMIT 1"
-                ).fetchone()
+        with self._lock, self._get_conn() as conn:
+            total = conn.execute("SELECT COUNT(*) FROM analyses").fetchone()[0]
+            alerts = conn.execute("SELECT COUNT(*) FROM analyses WHERE is_alert = 1").fetchone()[0]
+            last_ts = conn.execute(
+                "SELECT timestamp FROM analyses ORDER BY id DESC LIMIT 1"
+            ).fetchone()
         return {
             "total_analyses": total,
             "total_alerts": alerts,

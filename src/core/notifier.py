@@ -1,7 +1,6 @@
 import logging
 import os
 from collections import deque
-from typing import Optional
 
 import requests
 from tenacity import retry, stop_after_attempt, wait_exponential
@@ -66,8 +65,8 @@ class NotificationManager:
     def send_telegram_alert(
         self,
         text: str,
-        photo_path: Optional[str] = None,
-        chat_ids: Optional[list[str]] = None,
+        photo_path: str | None = None,
+        chat_ids: list[str] | None = None,
     ) -> bool:
         if not self.enabled or not self.token:
             logger.warning(f"Alert detected but Telegram not configured: {text[:50]}...")
@@ -95,7 +94,6 @@ class NotificationManager:
         return sent > 0
 
     def retry_failed(self) -> int:
-        """Retry previously failed alerts. Returns count of successfully retried."""
         if not self._failed_alerts:
             return 0
         retried = 0

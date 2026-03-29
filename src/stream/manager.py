@@ -1,7 +1,6 @@
 import logging
 import threading
 import time
-from typing import Optional
 
 import cv2
 import numpy as np
@@ -10,11 +9,11 @@ from src.config.settings import Settings
 
 logger = logging.getLogger(__name__)
 
-MAX_RECONNECT_DELAY = 30  # seconds
+MAX_RECONNECT_DELAY = 30
 
 
 class StreamManager:
-    def __init__(self, sources: Optional[dict] = None) -> None:
+    def __init__(self, sources: dict | None = None) -> None:
         self.sources = sources if sources is not None else Settings.SOURCES
         self.caps: dict[str, cv2.VideoCapture] = {}
         self._reconnect_attempts: dict[str, int] = {}
@@ -33,7 +32,7 @@ class StreamManager:
             cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         self.caps[name] = cap
 
-    def get_frame(self, name: str) -> tuple[bool, Optional[np.ndarray]]:
+    def get_frame(self, name: str) -> tuple[bool, np.ndarray | None]:
         cap = self.caps.get(name)
         if cap is None or not cap.isOpened():
             self._schedule_reconnect(name)

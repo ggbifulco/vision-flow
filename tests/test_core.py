@@ -1,9 +1,6 @@
-import re
-
-import pytest
-from src.core.notifier import NotificationManager
-from src.core.circuit_breaker import CircuitBreaker
 from src.api.routes.analysis import _is_prompt_injection
+from src.core.circuit_breaker import CircuitBreaker
+from src.core.notifier import NotificationManager
 
 
 class TestNotificationManager:
@@ -53,12 +50,12 @@ class TestCircuitBreaker:
         assert cb.is_open is False
 
     def test_half_open_after_timeout(self):
+        import time
+
         cb = CircuitBreaker(failure_threshold=2, recovery_timeout=0.1)
         cb.record_failure()
         cb.record_failure()
         assert cb.is_open is True
-        import time
-
         time.sleep(0.15)
         assert cb.can_execute() is True
 

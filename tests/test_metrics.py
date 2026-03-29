@@ -1,8 +1,7 @@
-import time
 import threading
 
-from src.core.circuit_breaker import CircuitBreaker
 from src.config.settings import Settings
+from src.core.circuit_breaker import CircuitBreaker
 
 
 class TestCircuitBreakerEdgeCases:
@@ -16,7 +15,6 @@ class TestCircuitBreakerEdgeCases:
 
     def test_concurrent_access(self):
         cb = CircuitBreaker(failure_threshold=10)
-        errors = []
 
         def writer():
             for _ in range(100):

@@ -1,5 +1,4 @@
 import asyncio
-import json
 import logging
 import threading
 import time
@@ -9,12 +8,11 @@ from pathlib import Path
 import requests
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, FileResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, Response
 
-from src.api.routes import video, analysis, config
 from src.api.deps import get_engine, get_stream_manager, limiter
+from src.api.routes import analysis, config, video
 from src.config.settings import Settings
-from src.vlm.visual_expert import get_vlm_circuit
 
 logger = logging.getLogger(__name__)
 
@@ -200,6 +198,8 @@ app.include_router(config.router)
 
 @app.get("/health")
 async def health() -> dict:
+    from src.vlm.visual_expert import get_vlm_circuit
+
     sm = get_stream_manager()
     circuit = get_vlm_circuit()
     cameras = {name: cap.isOpened() for name, cap in sm.caps.items()}
